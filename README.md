@@ -56,17 +56,6 @@ The AI Revenue Advisor turns creator revenue context into short, action-oriented
 
 The advisor is designed to be concise and practical. It does not simply repeat metrics; it translates fee and token activity into creator actions.
 
-## History
-
-The History page shows fee claim activity for a wallet. Claim events include:
-
-- Token mint.
-- Claimed SOL amount.
-- Claim time.
-- Transaction or Bags token page link.
-
-This gives creators a clean way to review past fee collection and understand how revenue has moved over time.
-
 ## Leaderboard
 
 The Leaderboard ranks active Bags token creators using creator revenue, claimable fees, trading activity, and momentum. It is designed to highlight tokens that are not only historically successful, but also currently active.
@@ -158,6 +147,17 @@ The signal uses features such as:
 - Creator social context.
 - Liquidity and momentum risk flags.
 
+## History
+
+The History page shows fee claim activity for a wallet. Claim events include:
+
+- Token mint.
+- Claimed SOL amount.
+- Claim time.
+- Transaction or Bags token page link.
+
+This gives creators a clean way to review past fee collection and understand how revenue has moved over time.
+
 ## Data Pipeline
 
 BagsSignal combines Bags API data, Solana on-chain metadata, Bitquery trading data, and local SQLite storage.
@@ -176,6 +176,8 @@ Bags API powers core creator and fee data:
 ### On-Chain Metadata
 
 Token images are resolved from Solana token metadata through `@solana/web3.js`. BagsSignal reads the Metaplex metadata PDA, extracts the metadata URI, and resolves token image data when available.
+
+Claim history also keeps an on-chain context by preserving transaction signatures and linking claim activity back to the relevant Solana transaction or Bags token page. This connects fee collection history with the token-level metadata used across the Dashboard and Leaderboard.
 
 ### Bitquery
 
