@@ -52,6 +52,18 @@ export type ClaimEvent = {
   solscanUrl: string;
 };
 
+export type ClaimHistoryResponse = {
+  demoMode?: boolean;
+  source?: "bags-api" | "leaderboard-cache" | "demo";
+  events: ClaimEvent[];
+  pagination: {
+    page: number;
+    pageSize: number;
+    total: number;
+    totalPages: number;
+  };
+};
+
 export type TokenDetail = TokenPosition & {
   creators: Creator[];
   claimHistory: ClaimEvent[];

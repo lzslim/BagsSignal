@@ -22,8 +22,8 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "BagsDash",
-  description: "A Bags creator earnings dashboard for token fee revenue and claims."
+  title: "BagsSignal",
+  description: "A Bags creator intelligence dashboard for token fee revenue, market signals, and claims."
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

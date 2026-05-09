@@ -27,6 +27,12 @@ const signalLabels = {
   risk: "Risk"
 };
 
+const confidenceLabels = {
+  high: "Strong Signal",
+  medium: "Developing Signal",
+  low: "Needs More Data"
+};
+
 export function LeaderboardTable({
   entries,
   showingLabel,
@@ -57,7 +63,6 @@ export function LeaderboardTable({
               <th className="px-5 py-4">CA</th>
               <th className="px-5 py-4">Lifetime Earned</th>
               <th className="px-5 py-4">Claimable Now</th>
-              <th className="px-5 py-4">Share</th>
               <th className="px-5 py-4">Status</th>
               <th className="px-5 py-4">Link</th>
             </tr>
@@ -65,7 +70,7 @@ export function LeaderboardTable({
           <tbody>
             {entries.length === 0 ? (
               <tr>
-                <td colSpan={10} className="px-5 py-8 text-center text-sm text-muted">
+                <td colSpan={9} className="px-5 py-8 text-center text-sm text-muted">
                   No creators found matching your search.
                 </td>
               </tr>
@@ -137,7 +142,6 @@ export function LeaderboardTable({
                     <td className="px-5 py-4 font-mono text-xs text-muted">{formatAddress(entry.mint, 6, 6)}</td>
                     <td className="px-5 py-4 font-mono text-white">{formatSOL(entry.lifetimeEarnedSOL)}</td>
                     <td className="px-5 py-4 font-mono text-brand">{entry.claimableSOL > 0 ? formatSOL(entry.claimableSOL) : "-"}</td>
-                    <td className="px-5 py-4 text-muted">{entry.royaltyPct}%</td>
                     <td className="px-5 py-4">
                       <span className="rounded-full border border-line px-2.5 py-1 text-xs text-muted">
                         {entry.isGraduated ? "Graduated" : "Bonding Curve"}
@@ -161,7 +165,7 @@ export function LeaderboardTable({
                   </tr>
                   {isExpanded && entry.aiRecommendation ? (
                     <tr key={`${entry.mint}-ai`} className="border-b border-white/5 bg-white/[0.025]">
-                      <td colSpan={10} className="px-5 py-4">
+                      <td colSpan={9} className="px-5 py-4">
                         <AIRecommendationPanel recommendation={entry.aiRecommendation} />
                       </td>
                     </tr>
@@ -229,7 +233,7 @@ function AIRecommendationPanel({ recommendation }: { recommendation: TokenAIReco
               {signalLabels[recommendation.stance]}
             </span>
             <span className="rounded-full border border-line bg-white/[0.03] px-3 py-1 text-xs uppercase tracking-[0.14em] text-muted">
-              {recommendation.confidence} confidence
+              {confidenceLabels[recommendation.confidence]}
             </span>
           </div>
           <div className="mt-4 flex gap-3">

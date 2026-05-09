@@ -1,29 +1,37 @@
-import { BarChart3, ExternalLink, FlaskConical, Rocket } from "lucide-react";
+import { BarChart3, CircleAlert, ExternalLink, FlaskConical } from "lucide-react";
 import Link from "next/link";
 import { Panel } from "@/components/shared/Panel";
 
-export function EmptyCreatorState({ onSampleMode }: { onSampleMode: () => void }) {
+export function EmptyCreatorState({
+  onSampleMode,
+  title = "No Bags activity found for this wallet",
+  description = "This wallet does not have Bags creator revenue or claim history yet. Use sample mode to review the full claim, token, revenue, and advisor experience without tying it to the connected wallet."
+}: {
+  onSampleMode: () => void;
+  title?: string;
+  description?: string;
+}) {
   return (
     <Panel className="overflow-hidden p-0">
-      <div className="grid gap-0 lg:grid-cols-[1.1fr_0.9fr]">
-        <div className="p-7">
-          <div className="inline-flex h-11 w-11 items-center justify-center rounded-lg border border-brand/30 bg-brand/10 text-brand">
-            <Rocket className="h-5 w-5" />
+      <div className="px-6 py-10 sm:px-8">
+        <div className="mx-auto flex max-w-3xl flex-col items-center text-center">
+          <div className="inline-flex h-12 w-12 items-center justify-center rounded-lg border border-brand/30 bg-brand/10 text-brand">
+            <CircleAlert className="h-5 w-5" />
           </div>
           <h2 className="mt-5 font-display text-2xl font-semibold tracking-[0.01em] text-white">
-            No creator revenue found for this wallet
+            {title}
           </h2>
           <p className="mt-3 max-w-2xl text-sm leading-6 text-muted">
-            This wallet has not launched or collaborated on any Bags token yet. You can still explore live creator performance or open a sample dashboard built to show the full workflow.
+            {description}
           </p>
-          <div className="mt-6 flex flex-col gap-3 sm:flex-row">
+          <div className="mt-7 flex w-full flex-col items-stretch justify-center gap-3 sm:w-auto sm:flex-row sm:flex-wrap sm:items-center">
             <button
               type="button"
               onClick={onSampleMode}
               className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-brand px-5 text-sm font-semibold text-black transition hover:brightness-110"
             >
               <FlaskConical className="h-4 w-4" />
-              View sample creator
+              View sample mode
             </button>
             <Link
               href="/leaderboard"
@@ -36,25 +44,11 @@ export function EmptyCreatorState({ onSampleMode }: { onSampleMode: () => void }
               href="https://bags.fm"
               target="_blank"
               rel="noreferrer"
-              className="inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-line px-5 text-sm font-semibold text-white transition hover:border-brand/40 hover:bg-brand/10"
+              className="inline-flex h-11 w-fit items-center justify-center gap-2 rounded-lg border border-line px-5 text-sm font-semibold text-white transition hover:border-brand/40 hover:bg-brand/10"
             >
               Launch on Bags
               <ExternalLink className="h-4 w-4" />
             </a>
-          </div>
-        </div>
-        <div className="border-t border-line bg-white/[0.025] p-7 lg:border-l lg:border-t-0">
-          <div className="text-xs uppercase tracking-[0.18em] text-muted">What this means</div>
-          <div className="mt-4 space-y-4 text-sm leading-6 text-muted">
-            <div>
-              <span className="font-medium text-white">Your wallet is connected.</span> Bags simply has no claimable creator position for it yet.
-            </div>
-            <div>
-              <span className="font-medium text-white">The app is still live.</span> Leaderboard data and AI-ready token signals continue to use the local SQLite cache.
-            </div>
-            <div>
-              <span className="font-medium text-white">Sample mode is explicit.</span> It helps reviewers understand the claim, token, revenue, and advisor experience without pretending it belongs to the connected wallet.
-            </div>
           </div>
         </div>
       </div>

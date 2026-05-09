@@ -16,19 +16,19 @@ type DiscoveredLeaderboardToken = {
 };
 
 declare global {
-  var __bagsdashLeaderboardSyncPromise: Promise<{ syncedEntries: number; tokensSeen: number }> | null | undefined;
+  var __bagssignalLeaderboardSyncPromise: Promise<{ syncedEntries: number; tokensSeen: number }> | null | undefined;
 }
 
 export async function syncLeaderboardNow() {
-  if (global.__bagsdashLeaderboardSyncPromise) {
-    return global.__bagsdashLeaderboardSyncPromise;
+  if (global.__bagssignalLeaderboardSyncPromise) {
+    return global.__bagssignalLeaderboardSyncPromise;
   }
 
-  global.__bagsdashLeaderboardSyncPromise = runSync();
+  global.__bagssignalLeaderboardSyncPromise = runSync();
   try {
-    return await global.__bagsdashLeaderboardSyncPromise;
+    return await global.__bagssignalLeaderboardSyncPromise;
   } finally {
-    global.__bagsdashLeaderboardSyncPromise = null;
+    global.__bagssignalLeaderboardSyncPromise = null;
   }
 }
 
@@ -317,7 +317,7 @@ async function runSync() {
         recommendation.action,
         JSON.stringify(recommendation.evidence),
         "rules",
-        "bagsdash-rules-v1",
+        "bagssignal-rules-v1",
         now,
         row.syncedAt
       );
@@ -375,11 +375,11 @@ function applyCompositeRankScores<
     const momentumScore = buildMomentumScore(row.launchCreatedAt, tradeScore, volumeScore);
 
     const rankScore =
-      revenueScore * 0.34 +
-      claimableScore * 0.18 +
-      volumeScore * 0.22 +
-      tradeScore * 0.14 +
-      momentumScore * 0.12;
+      revenueScore * 0.4 +
+      volumeScore * 0.25 +
+      claimableScore * 0.15 +
+      tradeScore * 0.1 +
+      momentumScore * 0.1;
 
     return {
       ...row,

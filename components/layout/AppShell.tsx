@@ -1,7 +1,7 @@
 "use client";
 
 import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
-import { BarChart3, Clock3, Github, Settings, Trophy } from "lucide-react";
+import { BarChart3, Clock3, Github, Trophy } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Logo } from "@/components/layout/Logo";
@@ -10,19 +10,27 @@ import { cn } from "@/lib/utils";
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: BarChart3 },
   { href: "/leaderboard", label: "Leaderboard", icon: Trophy },
-  { href: "/dashboard/history", label: "History", icon: Clock3 },
-  { href: "/dashboard/settings", label: "Settings", icon: Settings }
+  { href: "/dashboard/history", label: "History", icon: Clock3 }
 ];
 
-export function AppShell({ title, children }: { title: string; children: React.ReactNode }) {
+export function AppShell({ children }: { title: string; children: React.ReactNode }) {
   const pathname = usePathname();
+  const activeTitle = pathname.startsWith("/leaderboard")
+    ? "Leaderboard"
+    : pathname.startsWith("/dashboard/history")
+      ? "History"
+      : "Dashboard";
 
   return (
     <div className="min-h-screen bg-ink text-white">
       <header className="fixed inset-x-0 top-0 z-40 h-16 border-b border-line bg-panel/92 backdrop-blur-md">
-        <div className="flex h-full items-center justify-between px-4 lg:px-6">
+        <div className="relative flex h-full items-center justify-between px-4 lg:px-6">
           <Logo />
-          <div className="font-display hidden text-sm font-medium tracking-[0.01em] text-muted md:block">{title}</div>
+          <div className="pointer-events-none absolute left-1/2 hidden -translate-x-1/2 md:block">
+            <div className="rounded-full border border-line bg-background/45 px-4 py-2 font-display text-sm font-semibold tracking-[0.01em] text-white shadow-[0_10px_30px_rgba(0,0,0,0.18)]">
+              {activeTitle}
+            </div>
+          </div>
           <div className="flex items-center gap-3">
             <div className="hidden items-center gap-2 rounded-full border border-line px-3 py-2 text-xs text-muted sm:flex">
               <span className="h-2 w-2 rounded-full bg-brand shadow-glow" />
@@ -53,10 +61,15 @@ export function AppShell({ title, children }: { title: string; children: React.R
             );
           })}
         </nav>
-        <div className="absolute bottom-4 left-4 right-4 flex items-center justify-between border-t border-line pt-4 text-xs text-muted">
-          <span>v0.1.0</span>
-          <a href="https://github.com" target="_blank" rel="noreferrer" aria-label="GitHub">
-            <Github className="h-4 w-4" />
+        <div className="absolute bottom-4 left-4 right-4 flex justify-center border-t border-line pt-4">
+          <a
+            href="https://github.com/lzslim/BagsSignal"
+            target="_blank"
+            rel="noreferrer"
+            aria-label="BagsSignal GitHub"
+            className="grid h-10 w-10 place-items-center rounded-lg border border-line text-muted transition hover:border-brand/40 hover:bg-brand/10 hover:text-white"
+          >
+            <Github className="h-5 w-5" />
           </a>
         </div>
       </aside>

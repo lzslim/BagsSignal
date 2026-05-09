@@ -53,9 +53,6 @@ export default function LeaderboardPage() {
             >
               {data?.demoMode ? "Demo Data" : "Live Data"}
             </div>
-            <div className="rounded-full border border-brand/20 bg-brand/10 px-3 py-2 text-xs font-medium text-brand">
-              Manual refresh
-            </div>
           </div>
         </div>
 
@@ -97,14 +94,14 @@ export default function LeaderboardPage() {
             <div>
               <div className="text-xs uppercase tracking-[0.18em] text-muted">Universe</div>
               <div className="mt-2 text-sm leading-6 text-white">
-                We merge recent Bags launches with actively traded Bags mints and keep up to 100 ranked tokens per manual sync.
+                We merge recent Bags launches with actively traded Bags mints and refresh the ranked token set on a recurring data update cycle.
               </div>
             </div>
             <div>
               <div className="text-xs uppercase tracking-[0.18em] text-muted">Rank Formula</div>
               <div className="mt-2 text-sm leading-6 text-white">
                 <span className="font-mono text-brand">Score</span>
-                {" = 34% earnings + 18% claimable + 22% 24h volume + 14% trades + 12% momentum"}
+                {" = 40% creator earnings + 25% 24h volume + 15% claimable fees + 10% trade activity + 10% momentum"}
               </div>
             </div>
             <div>

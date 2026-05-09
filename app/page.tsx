@@ -1,20 +1,22 @@
 "use client";
 
-import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 import { useWallet } from "@solana/wallet-adapter-react";
-import { ArrowRight, Github, ShieldCheck, Wallet } from "lucide-react";
+import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
+import { ArrowRight, Github, ShieldCheck } from "lucide-react";
 import Link from "next/link";
 import { useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Logo } from "@/components/layout/Logo";
 
 export default function HomePage() {
   const { connected } = useWallet();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const previewHome = searchParams.get("home") === "1";
 
   useEffect(() => {
-    if (connected) router.push("/dashboard");
-  }, [connected, router]);
+    if (connected && !previewHome) router.push("/dashboard");
+  }, [connected, previewHome, router]);
 
   return (
     <main className="grid-bg min-h-screen bg-ink">
@@ -22,8 +24,14 @@ export default function HomePage() {
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4">
           <Logo />
           <div className="flex items-center gap-3">
-            <a href="https://github.com" target="_blank" rel="noreferrer" aria-label="GitHub" className="rounded-lg border border-line p-2 text-muted transition hover:text-white">
-              <Github className="h-4 w-4" />
+            <a
+              href="https://github.com/lzslim/BagsSignal"
+              target="_blank"
+              rel="noreferrer"
+              aria-label="BagsSignal GitHub"
+              className="grid h-10 w-10 place-items-center rounded-lg border border-line text-muted transition hover:border-brand/40 hover:bg-brand/10 hover:text-white"
+            >
+              <Github className="h-5 w-5" />
             </a>
             <WalletMultiButton />
           </div>
@@ -36,30 +44,18 @@ export default function HomePage() {
           Bags Hackathon 2026
         </div>
         <h1 className="font-display max-w-4xl text-5xl font-bold tracking-[0.01em] text-white md:text-7xl">
-          Track Your Creator Earnings
+          Creator Revenue Signals for Bags
         </h1>
         <p className="mt-5 max-w-2xl text-lg leading-8 text-muted">
-          Connect your wallet to see token fee revenue from Bags, inspect fee-share collaborators, and claim creator earnings when they are ready.
+          BagsSignal turns Bags token fees, creator revenue, trading momentum, and AI-ready market data into a focused workspace for creators and reviewers.
         </p>
-        <div className="mt-9 flex flex-col items-center gap-4 sm:flex-row">
-          <WalletMultiButton />
-          <Link href="/dashboard" className="inline-flex h-12 items-center gap-2 rounded-lg border border-line px-5 text-sm font-semibold text-white transition hover:border-brand/50 hover:bg-brand/10">
-            Open demo
-            <ArrowRight className="h-4 w-4" />
-          </Link>
-          <Link href="/leaderboard" className="inline-flex h-12 items-center gap-2 rounded-lg border border-line px-5 text-sm font-semibold text-white transition hover:border-brand/50 hover:bg-brand/10">
-            View leaderboard
-            <ArrowRight className="h-4 w-4" />
-          </Link>
-        </div>
-        <div className="mt-10 flex flex-wrap items-center justify-center gap-3 text-sm text-muted">
-          <span>Supports</span>
-          {["Phantom", "Solflare", "Backpack", "Ledger"].map((wallet) => (
-            <span key={wallet} className="rounded-lg border border-line bg-panel/70 px-3 py-2">
-              {wallet}
-            </span>
-          ))}
-        </div>
+        <Link
+          href="/leaderboard"
+          className="mt-9 inline-flex h-12 items-center gap-2 rounded-lg bg-brand px-5 text-sm font-semibold text-black transition hover:brightness-110"
+        >
+          Explore live leaderboard
+          <ArrowRight className="h-4 w-4" />
+        </Link>
         <div className="mt-14 grid w-full max-w-3xl grid-cols-1 divide-y divide-line rounded-lg border border-line bg-panel/70 sm:grid-cols-3 sm:divide-x sm:divide-y-0">
           {[
             ["1K+", "Creators"],

@@ -1,4 +1,4 @@
-import type { DashboardResponse, LeaderboardEntry, LeaderboardResponse, TokenAIRecommendation, TokenPosition } from "@/lib/types";
+import type { ClaimEvent, ClaimHistoryResponse, DashboardResponse, LeaderboardEntry, LeaderboardResponse, TokenAIRecommendation, TokenPosition } from "@/lib/types";
 import { getDb } from "@/lib/sqlite";
 import { mockLeaderboard } from "@/lib/mock";
 import { hasLeaderboardSyncConfig } from "@/lib/leaderboard-sync";
@@ -296,6 +296,76 @@ export function readSampleDashboardFromLeaderboard(limit = 8): DashboardResponse
     tokens,
     chart: buildSampleChart(totalClaimableSOL)
   };
+}
+
+export function readSampleClaimHistoryFromLeaderboard(page = 1, pageSize = 20): ClaimHistoryResponse | null {
+  const leaderboard = readLeaderboardFromStore({
+    sort: "score",
+    page: 1,
+    pageSize: 50,
+    search: ""
+  });
+
+  const events = leaderboard.entries
+    .filter((entry) => entry.lifetimeEarnedSOL > 0 || entry.claimableSOL > 0 || entry.lifetimeTotalSOL > 0)
+    .flatMap((entry, index): ClaimEvent[] => {
+      const primaryAmount = entry.claimableSOL > 0
+        ? entry.claimableSOL
+        : Math.max(entry.lifetimeEarnedSOL * 0.08, entry.lifetimeTotalSOL * 0.004, 0.01);
+      const secondaryAmount = entry.lifetimeEarnedSOL > primaryAmount
+        ? Math.max(entry.lifetimeEarnedSOL * 0.035, 0.01)
+        : 0;
+      const baseTime = Date.now() - index * 18 * 60 * 60 * 1000;
+      const wallet = entry.creatorWallet || "SampleBagsCreatorWallet111111111111111111111";
+
+      const event: ClaimEvent = {
+        mint: entry.mint,
+        wallet,
+        amountSOL: Number(primaryAmount.toFixed(4)),
+        timestamp: new Date(baseTime).toISOString(),
+        txHash: buildSampleTxHash(entry.mint, index, 0),
+        solscanUrl: `https://bags.fm/${entry.mint}`
+      };
+
+      if (secondaryAmount <= 0) return [event];
+
+      return [
+        event,
+        {
+          mint: entry.mint,
+          wallet,
+          amountSOL: Number(secondaryAmount.toFixed(4)),
+          timestamp: new Date(baseTime - 3 * 24 * 60 * 60 * 1000).toISOString(),
+          txHash: buildSampleTxHash(entry.mint, index, 1),
+          solscanUrl: `https://bags.fm/${entry.mint}`
+        }
+      ];
+    })
+    .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+
+  if (events.length === 0) return null;
+
+  const safePageSize = Math.min(Math.max(pageSize, 1), 50);
+  const safePage = Math.max(page, 1);
+  const total = events.length;
+  const start = (safePage - 1) * safePageSize;
+
+  return {
+    demoMode: true,
+    source: leaderboard.demoMode ? "demo" : "leaderboard-cache",
+    events: events.slice(start, start + safePageSize),
+    pagination: {
+      page: safePage,
+      pageSize: safePageSize,
+      total,
+      totalPages: Math.max(1, Math.ceil(total / safePageSize))
+    }
+  };
+}
+
+function buildSampleTxHash(mint: string, index: number, sequence: number) {
+  const seed = `${mint.replace(/[^a-zA-Z0-9]/g, "")}${index.toString(36)}${sequence.toString(36)}SampleClaim`;
+  return `${seed}${"111111111111111111111111111111111111111111111111"}`.slice(0, 48);
 }
 
 function buildSampleChart(totalClaimableSOL: number) {

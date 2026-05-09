@@ -3,7 +3,7 @@ import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 
 declare global {
-  var __bagsdashDb: DatabaseSync | undefined;
+  var __bagssignalDb: DatabaseSync | undefined;
 }
 
 function resolveDbPath() {
@@ -12,11 +12,11 @@ function resolveDbPath() {
     ? path.isAbsolute(configured)
       ? configured
       : path.join(process.cwd(), configured)
-    : path.join(process.cwd(), "data", "bagsdash.sqlite");
+    : path.join(process.cwd(), "data", "bagssignal.sqlite");
 }
 
 export function getDb() {
-  if (!global.__bagsdashDb) {
+  if (!global.__bagssignalDb) {
     const dbPath = resolveDbPath();
     mkdirSync(path.dirname(dbPath), { recursive: true });
     const db = new DatabaseSync(dbPath);
@@ -111,11 +111,11 @@ export function getDb() {
         updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
       );
     `);
-    global.__bagsdashDb = db;
+    global.__bagssignalDb = db;
   }
 
-  ensureLeaderboardSchema(global.__bagsdashDb);
-  return global.__bagsdashDb;
+  ensureLeaderboardSchema(global.__bagssignalDb);
+  return global.__bagssignalDb;
 }
 
 function ensureLeaderboardSchema(db: DatabaseSync) {
