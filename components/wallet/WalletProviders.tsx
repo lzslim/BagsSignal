@@ -7,7 +7,7 @@ import { useMemo } from "react";
 import { DEFAULT_RPC_URL } from "@/lib/constants";
 
 export function WalletProviders({ children }: { children: React.ReactNode }) {
-  const endpoint = process.env.NEXT_PUBLIC_SOLANA_RPC_URL ?? DEFAULT_RPC_URL;
+  const endpoint = process.env.NEXT_PUBLIC_SOLANA_RPC_URL?.trim() || DEFAULT_RPC_URL;
   const wallets = useMemo(() => [new PhantomWalletAdapter(), new SolflareWalletAdapter()], []);
 
   return (

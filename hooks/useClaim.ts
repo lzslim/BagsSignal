@@ -88,7 +88,12 @@ export function useClaim() {
 
     for (let index = 0; index < signed.length; index += 1) {
       const tx = signed[index];
-      const signature = await connection.sendRawTransaction(tx.serialize());
+      let signature: string;
+      try {
+        signature = await connection.sendRawTransaction(tx.serialize());
+      } catch (error) {
+        throw normalizeRpcSendError(error);
+      }
       const latestBlockhash = transactions[index]?.blockhash ?? (await connection.getLatestBlockhash());
       await connection.confirmTransaction(
         {
@@ -170,4 +175,16 @@ function decodeBase58(value: string) {
   }
 
   return Buffer.from(bytes.reverse());
+}
+
+function normalizeRpcSendError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error);
+
+  if (message.includes("403") || message.toLowerCase().includes("access forbidden")) {
+    return new Error(
+      "Solana RPC rejected the signed transaction with 403 Access forbidden. Set NEXT_PUBLIC_SOLANA_RPC_URL to a mainnet RPC endpoint that allows sendTransaction/sendRawTransaction, then restart the dev server."
+    );
+  }
+
+  return error instanceof Error ? error : new Error(message);
 }
