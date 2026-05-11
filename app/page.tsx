@@ -4,11 +4,19 @@ import { useWallet } from "@solana/wallet-adapter-react";
 import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 import { ArrowRight, Github, ShieldCheck } from "lucide-react";
 import Link from "next/link";
-import { useEffect } from "react";
+import { Suspense, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Logo } from "@/components/layout/Logo";
 
 export default function HomePage() {
+  return (
+    <Suspense fallback={<HomeShell />}>
+      <HomeContent />
+    </Suspense>
+  );
+}
+
+function HomeContent() {
   const { connected } = useWallet();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -18,6 +26,10 @@ export default function HomePage() {
     if (connected && !previewHome) router.push("/dashboard");
   }, [connected, previewHome, router]);
 
+  return <HomeShell />;
+}
+
+function HomeShell() {
   return (
     <main className="grid-bg min-h-screen bg-ink">
       <header className="fixed inset-x-0 top-0 z-30 border-b border-white/5 bg-ink/50 backdrop-blur-md">
