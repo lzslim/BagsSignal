@@ -12,11 +12,16 @@ export function ensureLeaderboardScheduler() {
 
   if (!hasLeaderboardSyncConfig()) return;
 
-  if (getLeaderboardEntryCount() === 0 && shouldAutoSyncLeaderboard()) {
-    void syncLeaderboardNow().catch(() => {});
-  }
+  void Promise.all([getLeaderboardEntryCount(), shouldAutoSyncLeaderboard()])
+    .then(([count, shouldSync]) => {
+      if (count === 0 && shouldSync) void syncLeaderboardNow().catch(() => {});
+    })
+    .catch(() => {});
   global.__bagssignalLeaderboardSchedulerTimer = setInterval(() => {
-    if (!shouldAutoSyncLeaderboard()) return;
-    void syncLeaderboardNow().catch(() => {});
+    void shouldAutoSyncLeaderboard()
+      .then((shouldSync) => {
+        if (shouldSync) void syncLeaderboardNow().catch(() => {});
+      })
+      .catch(() => {});
   }, getLeaderboardSyncIntervalMs());
 }

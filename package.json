@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "migrate:supabase": "node scripts/migrate-sqlite-to-supabase.mjs"
   },
   "dependencies": {
     "@solana/wallet-adapter-base": "^0.9.27",

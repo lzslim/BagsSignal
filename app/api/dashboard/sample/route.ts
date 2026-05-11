@@ -5,6 +5,6 @@ import { readSampleDashboardFromLeaderboard } from "@/lib/leaderboard-store";
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  const sample = readSampleDashboardFromLeaderboard(8);
+  const sample = await readSampleDashboardFromLeaderboard(8);
   return NextResponse.json(sample ?? mockDashboard);
 }

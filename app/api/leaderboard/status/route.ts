@@ -7,6 +7,6 @@ import { readLeaderboardSyncMeta } from "@/lib/leaderboard-store";
 export async function GET() {
   return NextResponse.json({
     configured: hasLeaderboardSyncConfig(),
-    latestRun: readLeaderboardSyncMeta()
+    latestRun: await readLeaderboardSyncMeta()
   });
 }

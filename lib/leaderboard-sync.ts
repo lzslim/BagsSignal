@@ -1,6 +1,6 @@
 import { fetchBagsTokens, fetchBagsTradeMetrics } from "@/lib/bitquery";
 import { getClaimablePositions, getTokenCreators, getTokenLaunchFeed, getTokenLifetimeFees, getTokenPublicProfile } from "@/lib/bags-api";
-import { getDb } from "@/lib/sqlite";
+import { supabaseCount, supabaseDeleteWhere, supabaseInsert, supabaseUpsert } from "@/lib/supabase-rest";
 import { creatorProviderUrl, formatAddress } from "@/lib/utils";
 
 type DiscoveredLeaderboardToken = {
@@ -64,7 +64,6 @@ async function discoverLeaderboardTokens(limit: number): Promise<DiscoveredLeade
 }
 
 async function runSync() {
-  const db = getDb();
   const now = new Date().toISOString();
 
   try {
@@ -209,7 +208,7 @@ async function runSync() {
     }
     const rowsWithCreatorData = scoredRows.filter((row) => row.creatorProvider && row.creatorProvider !== "unknown").length;
     const rowsWithRevenueData = scoredRows.filter((row) => row.lifetimeTotalSOL > 0 || row.lifetimeEarnedSOL > 0 || row.claimableSOL > 0).length;
-    const hasExistingCache = getExistingLeaderboardCount(db) > 0;
+    const hasExistingCache = await getExistingLeaderboardCount() > 0;
     if (hasExistingCache && scoredRows.length >= 20 && rowsWithCreatorData === 0 && rowsWithRevenueData === 0) {
       throw new Error("Bags enrichment returned no creator or revenue data; keeping the existing leaderboard cache.");
     }
@@ -217,140 +216,116 @@ async function runSync() {
       .sort((a, b) => b.rankScore - a.rankScore)
       .slice(0, Math.min(scoredRows.length, syncLimit));
 
-    const clearStmt = db.prepare("DELETE FROM leaderboard_entries");
-    const clearAiStmt = db.prepare("DELETE FROM token_ai_features");
-    const clearRecommendationStmt = db.prepare("DELETE FROM token_ai_recommendations");
-    const insertStmt = db.prepare(`
-      INSERT INTO leaderboard_entries (
-        mint, symbol, name, image_url, creator_wallet, creator_wallet_short, creator_username, creator_provider, creator_url, creator_pfp,
-        lifetime_total_sol, lifetime_earned_sol, claimable_sol, royalty_bps, royalty_pct, is_graduated, bags_url, discovery_source,
-        volume_1h_usd, volume_6h_usd, volume_24h_usd, volume_7d_usd, trade_count_1h, trade_count_6h, trade_count_24h, trade_count_7d,
-        launch_created_at, rank_score, momentum_score, ai_readiness_score, last_trade_at, source, synced_at
-      ) VALUES (
-        ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
-      )
-    `);
-    const insertAiStmt = db.prepare(`
-      INSERT INTO token_ai_features (
-        mint, age_hours, volume_growth_1h_vs_24h, volume_growth_24h_vs_7d, trade_velocity_1h, revenue_velocity_sol,
-        has_metadata_image, has_social_creator, low_liquidity_risk, high_momentum, ai_summary_input_json,
-        rank_reason, growth_reason, risk_reason, recommended_action, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `);
-    const insertRecommendationStmt = db.prepare(`
-      INSERT INTO token_ai_recommendations (
-        mint, symbol, recommendation_type, stance, confidence, title, insight, action, evidence_json,
-        model_provider, model_name, generated_at, source_snapshot_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `);
-    const logStmt = db.prepare(`
-      INSERT INTO leaderboard_sync_runs (status, source, message, tokens_seen, synced_entries, created_at)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `);
+    await supabaseDeleteWhere("token_ai_recommendations", "mint=not.is.null");
+    await supabaseDeleteWhere("token_ai_features", "mint=not.is.null");
+    await supabaseDeleteWhere("leaderboard_entries", "mint=not.is.null");
 
-    clearStmt.run();
-    clearAiStmt.run();
-    clearRecommendationStmt.run();
-    for (const row of selectedRows) {
-      insertStmt.run(
-        row.mint,
-        row.symbol,
-        row.name,
-        row.imageUrl,
-        row.creatorWallet,
-        row.creatorWalletShort,
-        row.creatorUsername,
-        row.creatorProvider,
-        row.creatorUrl,
-        row.creatorPfp,
-        row.lifetimeTotalSOL,
-        row.lifetimeEarnedSOL,
-        row.claimableSOL,
-        row.royaltyBps,
-        row.royaltyPct,
-        row.isGraduated,
-        row.bagsUrl,
-        row.discoverySource,
-        row.volumeUsd1h,
-        row.volumeUsd6h,
-        row.volumeUsd24h,
-        row.volumeUsd7d,
-        row.tradeCount1h,
-        row.tradeCount6h,
-        row.tradeCount24h,
-        row.tradeCount7d,
-        row.launchCreatedAt,
-        row.rankScore,
-        row.momentumScore,
-        row.aiReadinessScore,
-        row.lastTradeAt,
-        "bitquery+bags",
-        row.syncedAt
-      );
-      insertAiStmt.run(
-        row.mint,
-        row.aiFeatures.ageHours,
-        row.aiFeatures.volumeGrowth1hVs24h,
-        row.aiFeatures.volumeGrowth24hVs7d,
-        row.aiFeatures.tradeVelocity1h,
-        row.aiFeatures.revenueVelocitySOL,
-        row.aiFeatures.hasMetadataImage ? 1 : 0,
-        row.aiFeatures.hasSocialCreator ? 1 : 0,
-        row.aiFeatures.lowLiquidityRisk ? 1 : 0,
-        row.aiFeatures.highMomentum ? 1 : 0,
-        JSON.stringify(row.aiFeatures.aiSummaryInput),
-        row.aiFeatures.rankReason,
-        row.aiFeatures.growthReason,
-        row.aiFeatures.riskReason,
-        row.aiFeatures.recommendedAction,
-        now
-      );
-      const recommendation = buildTokenRecommendation(row);
-      insertRecommendationStmt.run(
-        row.mint,
-        row.symbol,
-        recommendation.recommendationType,
-        recommendation.stance,
-        recommendation.confidence,
-        recommendation.title,
-        recommendation.insight,
-        recommendation.action,
-        JSON.stringify(recommendation.evidence),
-        "rules",
-        "bagssignal-rules-v1",
-        now,
-        row.syncedAt
-      );
-    }
+    await supabaseUpsert("leaderboard_entries", selectedRows.map(toLeaderboardRow), "mint");
+    await supabaseUpsert("token_ai_features", selectedRows.map((row) => toAiFeatureRow(row, now)), "mint");
+    await supabaseUpsert("token_ai_recommendations", selectedRows.map((row) => toRecommendationRow(row, now)), "mint");
 
-    logStmt.run(
-      "success",
-      "bitquery+bags",
-      `Tracked active universe: rank score blends creator earnings, claimable revenue, 1h/24h/7d volume, trade count, launch momentum, and AI-ready risk features.`,
-      discovered.length,
-      selectedRows.length,
-      now
-    );
+    await supabaseInsert("leaderboard_sync_runs", {
+      status: "success",
+      source: "bitquery+bags",
+      message: "Tracked active universe: rank score blends creator earnings, claimable revenue, 1h/24h/7d volume, trade count, launch momentum, and AI-ready risk features.",
+      tokens_seen: discovered.length,
+      synced_entries: selectedRows.length,
+      created_at: now
+    });
     return { syncedEntries: selectedRows.length, tokensSeen: discovered.length };
   } catch (error) {
-    db.prepare(`
-      INSERT INTO leaderboard_sync_runs (status, source, message, tokens_seen, synced_entries, created_at)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `).run(
-      "failed",
-      "bitquery+bags",
-      error instanceof Error ? error.message : "Unknown sync failure",
-      0,
-      0,
-      now
-    );
+    await supabaseInsert("leaderboard_sync_runs", {
+      status: "failed",
+      source: "bitquery+bags",
+      message: error instanceof Error ? error.message : "Unknown sync failure",
+      tokens_seen: 0,
+      synced_entries: 0,
+      created_at: now
+    }).catch(() => {});
     throw error;
   }
 }
 
-function getExistingLeaderboardCount(db: ReturnType<typeof getDb>) {
-  const row = db.prepare("SELECT count(*) as total FROM leaderboard_entries").get() as { total: number };
-  return Number(row.total);
+async function getExistingLeaderboardCount() {
+  return supabaseCount("leaderboard_entries");
+}
+
+function toLeaderboardRow(row: any) {
+  return {
+    mint: row.mint,
+    symbol: row.symbol,
+    name: row.name,
+    image_url: row.imageUrl,
+    creator_wallet: row.creatorWallet,
+    creator_wallet_short: row.creatorWalletShort,
+    creator_username: row.creatorUsername,
+    creator_provider: row.creatorProvider,
+    creator_url: row.creatorUrl,
+    creator_pfp: row.creatorPfp,
+    lifetime_total_sol: row.lifetimeTotalSOL,
+    lifetime_earned_sol: row.lifetimeEarnedSOL,
+    claimable_sol: row.claimableSOL,
+    royalty_bps: row.royaltyBps,
+    royalty_pct: row.royaltyPct,
+    is_graduated: row.isGraduated,
+    bags_url: row.bagsUrl,
+    discovery_source: row.discoverySource,
+    volume_1h_usd: row.volumeUsd1h,
+    volume_6h_usd: row.volumeUsd6h,
+    volume_24h_usd: row.volumeUsd24h,
+    volume_7d_usd: row.volumeUsd7d,
+    trade_count_1h: row.tradeCount1h,
+    trade_count_6h: row.tradeCount6h,
+    trade_count_24h: row.tradeCount24h,
+    trade_count_7d: row.tradeCount7d,
+    launch_created_at: row.launchCreatedAt,
+    rank_score: row.rankScore,
+    momentum_score: row.momentumScore,
+    ai_readiness_score: row.aiReadinessScore,
+    last_trade_at: row.lastTradeAt,
+    source: "bitquery+bags",
+    synced_at: row.syncedAt
+  };
+}
+
+function toAiFeatureRow(row: any, now: string) {
+  return {
+    mint: row.mint,
+    age_hours: row.aiFeatures.ageHours,
+    volume_growth_1h_vs_24h: row.aiFeatures.volumeGrowth1hVs24h,
+    volume_growth_24h_vs_7d: row.aiFeatures.volumeGrowth24hVs7d,
+    trade_velocity_1h: row.aiFeatures.tradeVelocity1h,
+    revenue_velocity_sol: row.aiFeatures.revenueVelocitySOL,
+    has_metadata_image: row.aiFeatures.hasMetadataImage ? 1 : 0,
+    has_social_creator: row.aiFeatures.hasSocialCreator ? 1 : 0,
+    low_liquidity_risk: row.aiFeatures.lowLiquidityRisk ? 1 : 0,
+    high_momentum: row.aiFeatures.highMomentum ? 1 : 0,
+    ai_summary_input_json: JSON.stringify(row.aiFeatures.aiSummaryInput),
+    rank_reason: row.aiFeatures.rankReason,
+    growth_reason: row.aiFeatures.growthReason,
+    risk_reason: row.aiFeatures.riskReason,
+    recommended_action: row.aiFeatures.recommendedAction,
+    updated_at: now
+  };
+}
+
+function toRecommendationRow(row: any, now: string) {
+  const recommendation = buildTokenRecommendation(row);
+  return {
+    mint: row.mint,
+    symbol: row.symbol,
+    recommendation_type: recommendation.recommendationType,
+    stance: recommendation.stance,
+    confidence: recommendation.confidence,
+    title: recommendation.title,
+    insight: recommendation.insight,
+    action: recommendation.action,
+    evidence_json: JSON.stringify(recommendation.evidence),
+    model_provider: "rules",
+    model_name: "bagssignal-rules-v1",
+    generated_at: now,
+    source_snapshot_at: row.syncedAt
+  };
 }
 
 function applyCompositeRankScores<

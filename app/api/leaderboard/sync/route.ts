@@ -10,14 +10,14 @@ export async function POST() {
     return NextResponse.json({
       ok: true,
       result,
-      latestRun: readLeaderboardSyncMeta()
+      latestRun: await readLeaderboardSyncMeta()
     });
   } catch (error) {
     return NextResponse.json(
       {
         ok: false,
         error: error instanceof Error ? error.message : "Failed to sync leaderboard",
-        latestRun: readLeaderboardSyncMeta()
+        latestRun: await readLeaderboardSyncMeta()
       },
       { status: 500 }
     );

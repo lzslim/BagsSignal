@@ -7,7 +7,7 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
 
   try {
-    return NextResponse.json(readLeaderboardFromStore({
+    return NextResponse.json(await readLeaderboardFromStore({
       sort: searchParams.get("sort") ?? "score",
       page: Number(searchParams.get("page") ?? "1"),
       pageSize: Number(searchParams.get("pageSize") ?? "20"),

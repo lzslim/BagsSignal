@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   ensureLeaderboardScheduler();
   try {
-    const payload = readLeaderboardFromStore({ page: 1, pageSize: 50 });
+    const payload = await readLeaderboardFromStore({ page: 1, pageSize: 50 });
     return NextResponse.json(payload.stats);
   } catch (error) {
     return NextResponse.json(

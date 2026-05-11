@@ -1,7 +1,7 @@
 import type { ClaimEvent, ClaimHistoryResponse, DashboardResponse, LeaderboardEntry, LeaderboardResponse, TokenAIRecommendation, TokenPosition } from "@/lib/types";
-import { getDb } from "@/lib/sqlite";
 import { mockLeaderboard } from "@/lib/mock";
 import { hasLeaderboardSyncConfig } from "@/lib/leaderboard-sync";
+import { hasSupabaseConfig, supabaseCount, supabaseSelect } from "@/lib/supabase-rest";
 
 type DbEntry = {
   mint: string;
@@ -42,7 +42,7 @@ type DbEntry = {
   recommendation_generated_at: string | null;
 };
 
-export function readLeaderboardFromStore({
+export async function readLeaderboardFromStore({
   sort = "score",
   page = 1,
   pageSize = 20,
@@ -54,49 +54,40 @@ export function readLeaderboardFromStore({
   pageSize?: number;
   search?: string;
   wallet?: string | null;
-}): LeaderboardResponse {
-  const db = getDb();
-  const rows = db.prepare(`
-    SELECT
-      leaderboard_entries.mint,
-      leaderboard_entries.symbol,
-      leaderboard_entries.name,
-      leaderboard_entries.image_url,
-      leaderboard_entries.creator_wallet,
-      leaderboard_entries.creator_wallet_short,
-      leaderboard_entries.creator_username,
-      leaderboard_entries.creator_provider,
-      leaderboard_entries.creator_url,
-      leaderboard_entries.creator_pfp,
-      leaderboard_entries.lifetime_total_sol,
-      leaderboard_entries.lifetime_earned_sol,
-      leaderboard_entries.claimable_sol,
-      leaderboard_entries.royalty_bps,
-      leaderboard_entries.royalty_pct,
-      leaderboard_entries.is_graduated,
-      leaderboard_entries.volume_1h_usd,
-      leaderboard_entries.volume_6h_usd,
-      leaderboard_entries.volume_24h_usd,
-      leaderboard_entries.volume_7d_usd,
-      leaderboard_entries.trade_count_1h,
-      leaderboard_entries.trade_count_6h,
-      leaderboard_entries.trade_count_24h,
-      leaderboard_entries.trade_count_7d,
-      leaderboard_entries.rank_score,
-      leaderboard_entries.momentum_score,
-      leaderboard_entries.ai_readiness_score,
-      leaderboard_entries.synced_at,
-      rec.recommendation_type,
-      rec.stance,
-      rec.confidence,
-      rec.title as recommendation_title,
-      rec.insight as recommendation_insight,
-      rec.action as recommendation_action,
-      rec.evidence_json,
-      rec.generated_at as recommendation_generated_at
-    FROM leaderboard_entries
-    LEFT JOIN token_ai_recommendations rec ON rec.mint = leaderboard_entries.mint
-  `).all() as DbEntry[];
+}): Promise<LeaderboardResponse> {
+  const [entriesRows, recommendationRows] = await Promise.all([
+    supabaseSelect<Omit<DbEntry, "recommendation_type" | "stance" | "confidence" | "recommendation_title" | "recommendation_insight" | "recommendation_action" | "evidence_json" | "recommendation_generated_at">>(
+      "leaderboard_entries",
+      "select=*&order=rank_score.desc"
+    ),
+    supabaseSelect<{
+      mint: string;
+      recommendation_type: TokenAIRecommendation["recommendationType"];
+      stance: TokenAIRecommendation["stance"];
+      confidence: TokenAIRecommendation["confidence"];
+      title: string;
+      insight: string;
+      action: string;
+      evidence_json: string;
+      generated_at: string;
+    }>("token_ai_recommendations", "select=*")
+  ]);
+
+  const recommendationMap = new Map(recommendationRows.map((row) => [row.mint, row]));
+  const rows = entriesRows.map((row) => {
+    const recommendation = recommendationMap.get(row.mint);
+    return {
+      ...row,
+      recommendation_type: recommendation?.recommendation_type ?? null,
+      stance: recommendation?.stance ?? null,
+      confidence: recommendation?.confidence ?? null,
+      recommendation_title: recommendation?.title ?? null,
+      recommendation_insight: recommendation?.insight ?? null,
+      recommendation_action: recommendation?.action ?? null,
+      evidence_json: recommendation?.evidence_json ?? null,
+      recommendation_generated_at: recommendation?.generated_at ?? null
+    };
+  }) as DbEntry[];
 
   if (rows.length === 0) {
     if (hasLeaderboardSyncConfig()) {
@@ -183,15 +174,8 @@ export function readLeaderboardFromStore({
   );
 }
 
-export function readLeaderboardSyncMeta() {
-  const db = getDb();
-  const latest = db.prepare(`
-    SELECT id, status, source, message, tokens_seen, synced_entries, created_at
-    FROM leaderboard_sync_runs
-    ORDER BY id DESC
-    LIMIT 1
-  `).get() as
-    | {
+export async function readLeaderboardSyncMeta() {
+  const latest = await supabaseSelect<{
     id: number;
     status: string;
     source: string;
@@ -199,14 +183,13 @@ export function readLeaderboardSyncMeta() {
     tokens_seen: number;
     synced_entries: number;
     created_at: string;
-  }
-    | undefined;
+  }>("leaderboard_sync_runs", "select=id,status,source,message,tokens_seen,synced_entries,created_at&order=id.desc&limit=1");
 
-  return latest ?? null;
+  return latest[0] ?? null;
 }
 
-export function shouldAutoSyncLeaderboard() {
-  const latest = readLeaderboardSyncMeta();
+export async function shouldAutoSyncLeaderboard() {
+  const latest = await readLeaderboardSyncMeta();
   if (!latest || latest.status !== "failed") return true;
 
   const lastRunAt = new Date(latest.created_at).getTime();
@@ -216,10 +199,9 @@ export function shouldAutoSyncLeaderboard() {
   return Date.now() - lastRunAt > cooldownMs;
 }
 
-export function getLeaderboardEntryCount() {
-  const db = getDb();
-  const row = db.prepare("SELECT count(*) as total FROM leaderboard_entries").get() as { total: number };
-  return Number(row.total);
+export async function getLeaderboardEntryCount() {
+  if (!hasSupabaseConfig()) return 0;
+  return supabaseCount("leaderboard_entries");
 }
 
 function buildRecommendation(row: DbEntry): TokenAIRecommendation | null {
@@ -254,8 +236,8 @@ function buildRecommendation(row: DbEntry): TokenAIRecommendation | null {
   };
 }
 
-export function readSampleDashboardFromLeaderboard(limit = 8): DashboardResponse | null {
-  const leaderboard = readLeaderboardFromStore({
+export async function readSampleDashboardFromLeaderboard(limit = 8): Promise<DashboardResponse | null> {
+  const leaderboard = await readLeaderboardFromStore({
     sort: "score",
     page: 1,
     pageSize: Math.min(Math.max(limit, 1), 20),
@@ -298,8 +280,8 @@ export function readSampleDashboardFromLeaderboard(limit = 8): DashboardResponse
   };
 }
 
-export function readSampleClaimHistoryFromLeaderboard(page = 1, pageSize = 20): ClaimHistoryResponse | null {
-  const leaderboard = readLeaderboardFromStore({
+export async function readSampleClaimHistoryFromLeaderboard(page = 1, pageSize = 20): Promise<ClaimHistoryResponse | null> {
+  const leaderboard = await readLeaderboardFromStore({
     sort: "score",
     page: 1,
     pageSize: 50,
