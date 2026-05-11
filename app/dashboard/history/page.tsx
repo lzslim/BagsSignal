@@ -1,12 +1,13 @@
 "use client";
 
 import { useWallet } from "@solana/wallet-adapter-react";
-import { ArrowLeft, BarChart3, CircleAlert, ExternalLink, FlaskConical } from "lucide-react";
+import { BarChart3, CircleAlert, ExternalLink, FlaskConical } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import useSWR from "swr";
 import { AppShell } from "@/components/layout/AppShell";
 import { SimulationWalletPicker } from "@/components/dashboard/SimulationWalletPicker";
+import { SampleModeBanner } from "@/components/dashboard/SampleModeBanner";
 import { Panel } from "@/components/shared/Panel";
 import { ErrorState, LoadingState } from "@/components/shared/StateViews";
 import { useRedirectOnDisconnect } from "@/hooks/useRedirectOnDisconnect";
@@ -70,25 +71,14 @@ export default function HistoryPage() {
               Review confirmed claim activity across Bags tokens linked to the active wallet.
             </p>
           </div>
-          <div className="flex flex-col gap-3 sm:flex-row">
-            {sampleMode ? (
-              <button
-                type="button"
-                onClick={handleBackToWalletView}
-                className="inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-line px-5 text-sm font-semibold text-white transition hover:border-brand/40 hover:bg-brand/10"
-              >
-                <ArrowLeft className="h-4 w-4" />
-                Back to wallet view
-              </button>
-            ) : null}
-          </div>
         </div>
 
         {sampleMode ? (
-          <div className="rounded-lg border border-brand/25 bg-brand/10 px-5 py-4 text-sm leading-6 text-brand">
-            Sample mode is active. You are viewing a realistic claim history walkthrough, not wallet-owned data.
-            {sampleWallet ? ` Simulated wallet: ${sampleWallet.slice(0, 6)}...${sampleWallet.slice(-4)}.` : ""}
-          </div>
+          <SampleModeBanner
+            label="claim history"
+            sampleWallet={sampleWallet}
+            onBack={handleBackToWalletView}
+          />
         ) : null}
 
         {isLoading ? <LoadingState label="Loading claim history..." /> : null}
@@ -99,7 +89,7 @@ export default function HistoryPage() {
             onSampleMode={() => setSampleMode(true)}
             onSimulateWallet={handleSimulateWallet}
             title="Connect a wallet to view claim history"
-            description="BagsSignal can show fee claim history after wallet connection. You can also open sample mode to inspect the history experience without connecting a wallet."
+            description="BagsSignal can show fee claim history after wallet connection. You can also open sample mode for a quick walkthrough, or simulate a ranked creator wallet to preview claim history from an active Bags creator."
           />
         ) : null}
 
@@ -136,7 +126,7 @@ function EmptyHistoryState({
   onSampleMode,
   onSimulateWallet,
   title = "No Bags activity found for this wallet",
-  description = "This wallet does not have Bags creator revenue or claim history yet. Use sample mode to review the full claim, token, revenue, and advisor experience without tying it to the connected wallet."
+  description = "This wallet does not have Bags creator revenue or claim history yet. Use sample mode for a quick walkthrough, or simulate a ranked creator wallet to preview real claim history from an active Bags creator without tying it to the connected wallet."
 }: {
   onSampleMode: () => void;
   onSimulateWallet?: (wallet: string) => void;

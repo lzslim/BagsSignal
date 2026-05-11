@@ -5,17 +5,17 @@ import { Panel } from "@/components/shared/Panel";
 
 export function RevenueChart({ data }: { data: Array<{ date: string; amount: number }> }) {
   return (
-    <Panel className="h-[380px] overflow-hidden p-0">
+    <Panel className="min-h-[430px] overflow-visible p-0">
       <div className="flex items-center justify-between border-b border-white/10 px-5 py-4">
         <div>
-          <div className="font-display text-xl font-semibold tracking-[0.01em] text-white">Revenue trend</div>
-          <div className="mt-1 text-sm text-muted">Recent claimable fee movement</div>
+          <div className="font-display text-xl font-semibold tracking-[0.01em] text-white">Claimed revenue trend</div>
+          <div className="mt-1 text-sm text-muted">Real Bags claim events over the last 7 days</div>
         </div>
         <div className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5 text-xs font-medium text-muted">7D</div>
       </div>
-      <div className="h-[300px] px-2 pb-4 pt-5 sm:px-4">
+      <div className="h-[340px] px-2 pb-8 pt-6 sm:px-5">
         <ResponsiveContainer width="100%" height="100%">
-          <AreaChart data={data} margin={{ left: -10, right: 12, top: 8, bottom: 0 }}>
+          <AreaChart data={data} margin={{ left: -8, right: 14, top: 8, bottom: 22 }}>
             <defs>
               <linearGradient id="bagsArea" x1="0" y1="0" x2="0" y2="1">
                 <stop offset="0%" stopColor="#02FF40" stopOpacity={0.34} />
@@ -24,7 +24,7 @@ export function RevenueChart({ data }: { data: Array<{ date: string; amount: num
               </linearGradient>
             </defs>
             <CartesianGrid stroke="rgba(255,255,255,0.055)" vertical={false} />
-            <XAxis dataKey="date" tick={{ fill: "#8A8AA0", fontSize: 12 }} axisLine={false} tickLine={false} dy={10} />
+            <XAxis dataKey="date" tick={{ fill: "#8A8AA0", fontSize: 12 }} axisLine={false} tickLine={false} dy={12} interval="preserveStartEnd" />
             <YAxis tick={{ fill: "#8A8AA0", fontSize: 12 }} axisLine={false} tickLine={false} width={48} />
             <Tooltip
               cursor={{ stroke: "rgba(2,255,64,0.28)", strokeWidth: 1 }}

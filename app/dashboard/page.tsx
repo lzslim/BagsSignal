@@ -1,13 +1,14 @@
 "use client";
 
 import { useWallet } from "@solana/wallet-adapter-react";
-import { ArrowLeft, BarChart3, Coins, WalletCards } from "lucide-react";
+import { BarChart3, Coins, WalletCards } from "lucide-react";
 import { useEffect, useState } from "react";
 import { AppShell } from "@/components/layout/AppShell";
 import { RevenueChart } from "@/components/dashboard/RevenueChart";
 import { SummaryCards } from "@/components/dashboard/SummaryCards";
 import { TokenList } from "@/components/dashboard/TokenList";
 import { EmptyCreatorState } from "@/components/dashboard/EmptyCreatorState";
+import { SampleModeBanner } from "@/components/dashboard/SampleModeBanner";
 import { AIAdvisorCard } from "@/components/ai/AIAdvisorCard";
 import { ClaimNotice } from "@/components/shared/ClaimNotice";
 import { ErrorState, LoadingState } from "@/components/shared/StateViews";
@@ -163,7 +164,7 @@ export default function DashboardPage() {
             onSampleMode={() => setSampleMode(true)}
             onSimulateWallet={handleSimulateWallet}
             title="Connect a wallet to view your creator dashboard"
-            description="BagsSignal can show your personal Bags creator revenue after wallet connection. You can also open sample mode to review the real dashboard experience without connecting a wallet."
+            description="BagsSignal can show your personal Bags creator revenue after wallet connection. You can also open sample mode for a quick walkthrough, or simulate a ranked creator wallet to preview active Bags creator data without connecting a wallet."
           />
         ) : null}
 
@@ -172,20 +173,11 @@ export default function DashboardPage() {
         {data && hasCreatorData ? (
           <>
             {sampleMode ? (
-              <div className="flex flex-col gap-3 rounded-xl border border-warning/30 bg-warning/10 px-4 py-3 text-sm text-orange-100 shadow-[0_18px_45px_rgba(0,0,0,0.16)] sm:flex-row sm:items-center sm:justify-between">
-                <span className="leading-6">
-                  Sample mode is active. You are viewing a realistic creator revenue walkthrough, not wallet-owned data.
-                  {sampleWallet ? ` Simulated wallet: ${sampleWallet.slice(0, 6)}...${sampleWallet.slice(-4)}.` : ""}
-                </span>
-                <button
-                  type="button"
-                  onClick={handleBackToWalletView}
-                  className="inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-white/15 bg-black/20 px-5 text-sm font-semibold text-white transition hover:border-brand/40 hover:bg-brand/10"
-                >
-                  <ArrowLeft className="h-4 w-4" />
-                  Back to wallet view
-                </button>
-              </div>
+              <SampleModeBanner
+                label="creator revenue"
+                sampleWallet={sampleWallet}
+                onBack={handleBackToWalletView}
+              />
             ) : data.demoMode ? (
               <div className="rounded-xl border border-warning/30 bg-warning/10 px-4 py-3 text-sm leading-6 text-orange-100 shadow-[0_18px_45px_rgba(0,0,0,0.16)]">
                 Demo mode is active because `BAGS_API_KEY` is not configured. The UI is fully interactive, and real Bags data will appear once the API key is added.

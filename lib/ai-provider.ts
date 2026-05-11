@@ -1,5 +1,4 @@
 import { Gauge, Sparkles, Target, TrendingUp } from "lucide-react";
-import { mockAIInsights, mockTokenAIInsights } from "@/lib/mock";
 import { buildInsightUserPrompt, buildTokenInsightPrompt, INSIGHT_SYSTEM_PROMPT, TOKEN_INSIGHT_SYSTEM_PROMPT } from "@/lib/ai-prompts";
 import type { AIInsightsResponse, InsightCard, TokenDetail, TokenPosition } from "@/lib/types";
 
@@ -20,7 +19,12 @@ export async function generateDashboardInsights(context: {
   wallet?: string | null;
 }): Promise<AIInsightsResponse> {
   if (!hasConfiguredProviderKey()) {
-    return mockAIInsights;
+    return {
+      provider: getProvider(),
+      generatedAt: Date.now(),
+      demoMode: true,
+      insights: []
+    };
   }
 
   const insights = await requestInsights({
@@ -38,7 +42,12 @@ export async function generateDashboardInsights(context: {
 
 export async function generateTokenInsights(token: TokenDetail): Promise<AIInsightsResponse> {
   if (!hasConfiguredProviderKey()) {
-    return mockTokenAIInsights(token.mint);
+    return {
+      provider: getProvider(),
+      generatedAt: Date.now(),
+      demoMode: true,
+      insights: []
+    };
   }
 
   const insights = await requestInsights({

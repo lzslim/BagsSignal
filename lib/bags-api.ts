@@ -1,6 +1,6 @@
 import { Connection, PublicKey } from "@solana/web3.js";
 import { BAGS_API_BASE_URL, DEFAULT_RPC_URL, SOLSCAN_BASE } from "@/lib/constants";
-import { mockDashboard, mockTokenDetail } from "@/lib/mock";
+import { buildClaimEventChart } from "@/lib/revenue-chart";
 import type { ClaimEvent, Creator, DashboardResponse, TokenDetail, TokenPosition } from "@/lib/types";
 import { bpsToPct, lamportsToSol, safeDate, tokenLabel } from "@/lib/utils";
 
@@ -301,7 +301,7 @@ function normalizeMetadataUri(uri: string) {
 
 export async function getDashboard(wallet: string): Promise<DashboardResponse> {
   if (!hasApiKey()) {
-    return mockDashboard;
+    throw new Error("BAGS_API_KEY is not configured");
   }
 
   const positions = await getClaimablePositions(wallet);
@@ -340,18 +340,21 @@ export async function getDashboard(wallet: string): Promise<DashboardResponse> {
     tokenCount: tokens.length,
     collaboratorCount: tokens.reduce((sum, token) => sum + token.collaborators, 0)
   };
+  const claimEvents = (await Promise.all(
+    tokens.map((token) => getClaimEvents(token.mint, wallet, 100, 0).catch(() => []))
+  )).flat();
 
   return {
     demoMode: false,
     summary,
     tokens,
-    chart: buildChart(summary.totalClaimableSOL)
+    chart: buildClaimEventChart(claimEvents)
   };
 }
 
 export async function getTokenDetail(tokenMint: string, wallet?: string): Promise<TokenDetail> {
   if (!hasApiKey()) {
-    return mockTokenDetail(tokenMint);
+    throw new Error("BAGS_API_KEY is not configured");
   }
 
   const [lifetimeTotalSOL, creators, positions, claimHistory] = await Promise.all([
@@ -387,9 +390,7 @@ export async function getTokenDetail(tokenMint: string, wallet?: string): Promis
 
 export async function getHistory(wallet: string, mint?: string, page = 1, pageSize = 20) {
   if (!hasApiKey()) {
-    const tokens = mint ? [mockTokenDetail(mint)] : mockDashboard.tokens.map((token) => mockTokenDetail(token.mint));
-    const events = tokens.flatMap((token) => token.claimHistory);
-    return paginateEvents(events, page, pageSize);
+    return paginateEvents([], page, pageSize);
   }
 
   const tokenMints = mint ? [mint] : (await getClaimablePositions(wallet)).map((item) => item.baseMint);
@@ -415,14 +416,6 @@ function paginateEvents(events: ClaimEvent[], page: number, pageSize: number) {
       totalPages: Math.max(1, Math.ceil(sorted.length / normalizedPageSize))
     }
   };
-}
-
-function buildChart(total: number) {
-  const labels = ["Apr 30", "May 01", "May 02", "May 03", "May 04", "May 05", "May 06"];
-  return labels.map((date, index) => ({
-    date,
-    amount: Number((total * (0.24 + index * 0.12)).toFixed(3))
-  }));
 }
 
 function delay(ms: number) {

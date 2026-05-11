@@ -17,14 +17,13 @@ import { useRedirectOnDisconnect } from "@/hooks/useRedirectOnDisconnect";
 import { useTokenDetail } from "@/hooks/useTokenDetail";
 import { useTokenInsights } from "@/hooks/useTokenInsights";
 import { SOLSCAN_BASE } from "@/lib/constants";
-import { mockWallet } from "@/lib/mock";
 import { formatAddress, formatSOL } from "@/lib/utils";
 
 export default function TokenDetailPage() {
   const params = useParams<{ mint: string }>();
   const { publicKey } = useWallet();
   useRedirectOnDisconnect();
-  const wallet = publicKey?.toBase58() ?? mockWallet;
+  const wallet = publicKey?.toBase58() ?? null;
   const { data, error, isLoading, mutate } = useTokenDetail(params.mint, wallet);
   const insights = useTokenInsights(publicKey?.toBase58() ?? null, data);
   const { claimOne, isClaiming } = useClaim();

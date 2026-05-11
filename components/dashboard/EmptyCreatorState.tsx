@@ -7,7 +7,7 @@ export function EmptyCreatorState({
   onSampleMode,
   onSimulateWallet,
   title = "No Bags activity found for this wallet",
-  description = "This wallet does not have Bags creator revenue or claim history yet. Use sample mode to review the full claim, token, revenue, and advisor experience without tying it to the connected wallet."
+  description = "This wallet does not have Bags creator revenue or claim history yet. Use sample mode for a quick walkthrough, or simulate a ranked creator wallet to preview dashboard data from an active Bags creator without tying it to the connected wallet."
 }: {
   onSampleMode: () => void;
   onSimulateWallet?: (wallet: string) => void;

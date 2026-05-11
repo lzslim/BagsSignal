@@ -1,5 +1,4 @@
 import { getClaimablePositions, getTokenCreators, getTokenLifetimeFees } from "@/lib/bags-api";
-import { mockLeaderboard } from "@/lib/mock";
 import type { LeaderboardEntry, LeaderboardResponse } from "@/lib/types";
 import { formatAddress, tokenLabel } from "@/lib/utils";
 
@@ -18,7 +17,7 @@ export async function getLeaderboard({
 }): Promise<LeaderboardResponse> {
   const seedMints = parseSeedMints();
   if (!process.env.BAGS_API_KEY || seedMints.length === 0) {
-    return filterAndPaginate(mockLeaderboard, sort, page, pageSize, search, wallet);
+    return filterAndPaginate(emptyLeaderboard(), sort, page, pageSize, search, wallet);
   }
 
   const walletPositions = wallet ? await getClaimablePositions(wallet).catch(() => []) : [];
@@ -84,6 +83,24 @@ export async function getLeaderboard({
     search,
     wallet
   );
+}
+
+function emptyLeaderboard(): LeaderboardResponse {
+  return {
+    demoMode: false,
+    stats: {
+      totalCreators: 0,
+      totalFeesSOL: 0,
+      topEarnerSOL: 0
+    },
+    entries: [],
+    pagination: {
+      page: 1,
+      pageSize: 0,
+      total: 0,
+      totalPages: 1
+    }
+  };
 }
 
 function parseSeedMints() {

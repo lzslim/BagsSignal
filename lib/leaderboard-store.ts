@@ -1,7 +1,7 @@
 import type { ClaimEvent, ClaimHistoryResponse, DashboardResponse, LeaderboardEntry, LeaderboardResponse, SimulatedWallet, TokenAIRecommendation, TokenPosition } from "@/lib/types";
-import { mockLeaderboard } from "@/lib/mock";
 import { getClaimEvents } from "@/lib/bags-api";
 import { hasLeaderboardSyncConfig } from "@/lib/leaderboard-sync";
+import { buildClaimEventChart } from "@/lib/revenue-chart";
 import { hasSupabaseConfig, supabaseCount, supabaseSelect } from "@/lib/supabase-rest";
 
 type DbEntry = {
@@ -115,7 +115,7 @@ export async function readLeaderboardFromStore({
         wallet
       );
     }
-    return filterAndPaginate(mockLeaderboard, sort, page, pageSize, search, wallet);
+    return filterAndPaginate(emptyLeaderboardResponse(), sort, page, pageSize, search, wallet);
   }
 
   const entries: LeaderboardEntry[] = rows.map((row, index) => ({
@@ -173,6 +173,24 @@ export async function readLeaderboardFromStore({
     search,
     wallet
   );
+}
+
+function emptyLeaderboardResponse(): LeaderboardResponse {
+  return {
+    demoMode: false,
+    stats: {
+      totalCreators: 0,
+      totalFeesSOL: 0,
+      topEarnerSOL: 0
+    },
+    entries: [],
+    pagination: {
+      page: 1,
+      pageSize: 0,
+      total: 0,
+      totalPages: 1
+    }
+  };
 }
 
 export async function readLeaderboardSyncMeta() {
@@ -321,6 +339,14 @@ export async function readSampleDashboardFromLeaderboard(limit = 8, simulatedWal
   const totalClaimableSOL = tokens.reduce((sum, token) => sum + token.claimableSOL, 0);
   const totalLifetimeEarnedSOL = tokens.reduce((sum, token) => sum + token.lifetimeEarnedSOL, 0);
   const totalLifetimeFeesSOL = tokens.reduce((sum, token) => sum + token.lifetimeTotalSOL, 0);
+  const chartWallet = simulatedWallet ?? entries[0]?.creatorWallet ?? null;
+  const claimEvents = chartWallet
+    ? (await Promise.all(
+      entries
+        .slice(0, limit)
+        .map((entry) => getClaimEvents(entry.mint, chartWallet, 100, 0).catch(() => []))
+    )).flat()
+    : [];
 
   return {
     demoMode: true,
@@ -333,7 +359,7 @@ export async function readSampleDashboardFromLeaderboard(limit = 8, simulatedWal
       collaboratorCount: tokens.reduce((sum, token) => sum + token.collaborators, 0)
     },
     tokens,
-    chart: buildSampleChart(totalClaimableSOL)
+    chart: buildClaimEventChart(claimEvents)
   };
 }
 
@@ -388,14 +414,6 @@ export async function readSampleClaimHistoryFromLeaderboard(page = 1, pageSize =
       totalPages: 1
     }
   };
-}
-
-function buildSampleChart(totalClaimableSOL: number) {
-  const labels = ["Apr 30", "May 01", "May 02", "May 03", "May 04", "May 05", "May 06"];
-  return labels.map((date, index) => ({
-    date,
-    amount: Number((totalClaimableSOL * (0.28 + index * 0.12)).toFixed(3))
-  }));
 }
 
 function shuffle<T>(items: T[]) {
