@@ -1,5 +1,6 @@
-import type { ClaimEvent, ClaimHistoryResponse, DashboardResponse, LeaderboardEntry, LeaderboardResponse, TokenAIRecommendation, TokenPosition } from "@/lib/types";
+import type { ClaimEvent, ClaimHistoryResponse, DashboardResponse, LeaderboardEntry, LeaderboardResponse, SimulatedWallet, TokenAIRecommendation, TokenPosition } from "@/lib/types";
 import { mockLeaderboard } from "@/lib/mock";
+import { getClaimEvents } from "@/lib/bags-api";
 import { hasLeaderboardSyncConfig } from "@/lib/leaderboard-sync";
 import { hasSupabaseConfig, supabaseCount, supabaseSelect } from "@/lib/supabase-rest";
 
@@ -236,17 +237,72 @@ function buildRecommendation(row: DbEntry): TokenAIRecommendation | null {
   };
 }
 
-export async function readSampleDashboardFromLeaderboard(limit = 8): Promise<DashboardResponse | null> {
+export async function readSimulationWalletsFromLeaderboard(limit = 8): Promise<SimulatedWallet[]> {
   const leaderboard = await readLeaderboardFromStore({
     sort: "score",
     page: 1,
-    pageSize: Math.min(Math.max(limit, 1), 20),
+    pageSize: 50,
     search: ""
   });
 
-  if (leaderboard.entries.length === 0) return null;
+  const walletMap = new Map<string, SimulatedWallet & { score: number }>();
 
-  const tokens: TokenPosition[] = leaderboard.entries.map((entry) => ({
+  for (const entry of leaderboard.entries) {
+    if (!entry.creatorWallet) continue;
+
+    const current = walletMap.get(entry.creatorWallet);
+    const label = entry.creatorUsername
+      ? `@${entry.creatorUsername}`
+      : entry.creatorWalletShort || `${entry.creatorWallet.slice(0, 6)}...${entry.creatorWallet.slice(-4)}`;
+    const score = (entry.rankScore ?? 0) + entry.lifetimeEarnedSOL * 4 + entry.claimableSOL * 8;
+
+    if (!current) {
+      walletMap.set(entry.creatorWallet, {
+        wallet: entry.creatorWallet,
+        walletShort: entry.creatorWalletShort || `${entry.creatorWallet.slice(0, 6)}...${entry.creatorWallet.slice(-4)}`,
+        label,
+        provider: entry.creatorProvider,
+        tokenCount: 1,
+        lifetimeEarnedSOL: entry.lifetimeEarnedSOL,
+        claimableSOL: entry.claimableSOL,
+        topTokenSymbol: entry.symbol,
+        score
+      });
+      continue;
+    }
+
+    current.tokenCount += 1;
+    current.lifetimeEarnedSOL += entry.lifetimeEarnedSOL;
+    current.claimableSOL += entry.claimableSOL;
+    current.score += score;
+    if ((entry.rankScore ?? 0) > current.score) current.topTokenSymbol = entry.symbol;
+  }
+
+  return Array.from(walletMap.values())
+    .sort((a, b) => b.score - a.score)
+    .slice(0, Math.min(Math.max(limit, 1), 12))
+    .map(({ score: _score, ...wallet }) => ({
+      ...wallet,
+      lifetimeEarnedSOL: Number(wallet.lifetimeEarnedSOL.toFixed(4)),
+      claimableSOL: Number(wallet.claimableSOL.toFixed(4))
+    }));
+}
+
+export async function readSampleDashboardFromLeaderboard(limit = 8, simulatedWallet?: string | null): Promise<DashboardResponse | null> {
+  const leaderboard = await readLeaderboardFromStore({
+    sort: "score",
+    page: 1,
+    pageSize: simulatedWallet ? 50 : Math.min(Math.max(limit, 1), 20),
+    search: ""
+  });
+
+  const entries = simulatedWallet
+    ? leaderboard.entries.filter((entry) => entry.creatorWallet === simulatedWallet)
+    : leaderboard.entries;
+
+  if (entries.length === 0) return null;
+
+  const tokens: TokenPosition[] = entries.slice(0, limit).map((entry) => ({
     mint: entry.mint,
     symbol: entry.symbol,
     name: entry.name ?? entry.symbol,
@@ -268,6 +324,7 @@ export async function readSampleDashboardFromLeaderboard(limit = 8): Promise<Das
 
   return {
     demoMode: true,
+    simulatedWallet: simulatedWallet ?? null,
     summary: {
       totalClaimableSOL,
       totalLifetimeEarnedSOL,
@@ -280,7 +337,7 @@ export async function readSampleDashboardFromLeaderboard(limit = 8): Promise<Das
   };
 }
 
-export async function readSampleClaimHistoryFromLeaderboard(page = 1, pageSize = 20): Promise<ClaimHistoryResponse | null> {
+export async function readSampleClaimHistoryFromLeaderboard(page = 1, pageSize = 20, simulatedWallet?: string | null): Promise<ClaimHistoryResponse | null> {
   const leaderboard = await readLeaderboardFromStore({
     sort: "score",
     page: 1,
@@ -288,66 +345,49 @@ export async function readSampleClaimHistoryFromLeaderboard(page = 1, pageSize =
     search: ""
   });
 
-  const events = leaderboard.entries
-    .filter((entry) => entry.lifetimeEarnedSOL > 0 || entry.claimableSOL > 0 || entry.lifetimeTotalSOL > 0)
-    .flatMap((entry, index): ClaimEvent[] => {
-      const primaryAmount = entry.claimableSOL > 0
-        ? entry.claimableSOL
-        : Math.max(entry.lifetimeEarnedSOL * 0.08, entry.lifetimeTotalSOL * 0.004, 0.01);
-      const secondaryAmount = entry.lifetimeEarnedSOL > primaryAmount
-        ? Math.max(entry.lifetimeEarnedSOL * 0.035, 0.01)
-        : 0;
-      const baseTime = Date.now() - index * 18 * 60 * 60 * 1000;
-      const wallet = entry.creatorWallet || "SampleBagsCreatorWallet111111111111111111111";
-
-      const event: ClaimEvent = {
-        mint: entry.mint,
-        wallet,
-        amountSOL: Number(primaryAmount.toFixed(4)),
-        timestamp: new Date(baseTime).toISOString(),
-        txHash: buildSampleTxHash(entry.mint, index, 0),
-        solscanUrl: `https://bags.fm/${entry.mint}`
-      };
-
-      if (secondaryAmount <= 0) return [event];
-
-      return [
-        event,
-        {
-          mint: entry.mint,
-          wallet,
-          amountSOL: Number(secondaryAmount.toFixed(4)),
-          timestamp: new Date(baseTime - 3 * 24 * 60 * 60 * 1000).toISOString(),
-          txHash: buildSampleTxHash(entry.mint, index, 1),
-          solscanUrl: `https://bags.fm/${entry.mint}`
-        }
-      ];
-    })
-    .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-
-  if (events.length === 0) return null;
-
   const safePageSize = Math.min(Math.max(pageSize, 1), 50);
   const safePage = Math.max(page, 1);
-  const total = events.length;
-  const start = (safePage - 1) * safePageSize;
+  const candidateWallets = simulatedWallet
+    ? [simulatedWallet]
+    : shuffle(Array.from(new Set(leaderboard.entries.map((entry) => entry.creatorWallet).filter(Boolean))));
+
+  for (const wallet of candidateWallets) {
+    const entries = leaderboard.entries.filter((entry) => entry.creatorWallet === wallet);
+    const realEvents = (await Promise.all(
+      entries.map((entry) => getClaimEvents(entry.mint, wallet, 100, 0).catch(() => []))
+    )).flat();
+
+    const sortedRealEvents = realEvents.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+    const start = (safePage - 1) * safePageSize;
+
+    if (sortedRealEvents.length === 0 && !simulatedWallet) continue;
+
+    return {
+      demoMode: true,
+      source: "bags-api",
+      simulatedWallet: wallet,
+      events: sortedRealEvents.slice(start, start + safePageSize),
+      pagination: {
+        page: safePage,
+        pageSize: safePageSize,
+        total: sortedRealEvents.length,
+        totalPages: Math.max(1, Math.ceil(sortedRealEvents.length / safePageSize))
+      }
+    };
+  }
 
   return {
     demoMode: true,
-    source: leaderboard.demoMode ? "demo" : "leaderboard-cache",
-    events: events.slice(start, start + safePageSize),
+    source: "bags-api",
+    simulatedWallet: simulatedWallet ?? null,
+    events: [],
     pagination: {
       page: safePage,
       pageSize: safePageSize,
-      total,
-      totalPages: Math.max(1, Math.ceil(total / safePageSize))
+      total: 0,
+      totalPages: 1
     }
   };
-}
-
-function buildSampleTxHash(mint: string, index: number, sequence: number) {
-  const seed = `${mint.replace(/[^a-zA-Z0-9]/g, "")}${index.toString(36)}${sequence.toString(36)}SampleClaim`;
-  return `${seed}${"111111111111111111111111111111111111111111111111"}`.slice(0, 48);
 }
 
 function buildSampleChart(totalClaimableSOL: number) {
@@ -356,6 +396,10 @@ function buildSampleChart(totalClaimableSOL: number) {
     date,
     amount: Number((totalClaimableSOL * (0.28 + index * 0.12)).toFixed(3))
   }));
+}
+
+function shuffle<T>(items: T[]) {
+  return [...items].sort(() => Math.random() - 0.5);
 }
 
 function filterAndPaginate(

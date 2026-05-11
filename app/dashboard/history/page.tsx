@@ -3,14 +3,17 @@
 import { useWallet } from "@solana/wallet-adapter-react";
 import { ArrowLeft, BarChart3, CircleAlert, ExternalLink, FlaskConical } from "lucide-react";
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import useSWR from "swr";
 import { AppShell } from "@/components/layout/AppShell";
+import { SimulationWalletPicker } from "@/components/dashboard/SimulationWalletPicker";
 import { Panel } from "@/components/shared/Panel";
 import { ErrorState, LoadingState } from "@/components/shared/StateViews";
 import { useRedirectOnDisconnect } from "@/hooks/useRedirectOnDisconnect";
 import type { ClaimHistoryResponse } from "@/lib/types";
 import { formatAddress, formatSOL } from "@/lib/utils";
+
+const SIMULATED_WALLET_KEY = "bagssignal.simulatedWallet";
 
 const fetcher = async (url: string) => {
   const response = await fetch(url);
@@ -22,10 +25,11 @@ const fetcher = async (url: string) => {
 export default function HistoryPage() {
   const { publicKey } = useWallet();
   const [sampleMode, setSampleMode] = useState(false);
+  const [sampleWallet, setSampleWallet] = useState<string | null>(null);
   useRedirectOnDisconnect();
   const wallet = publicKey?.toBase58();
   const historyUrl = sampleMode
-    ? "/api/claim/history/sample"
+    ? `/api/claim/history/sample${sampleWallet ? `?wallet=${encodeURIComponent(sampleWallet)}` : ""}`
     : wallet
       ? `/api/claim/history?wallet=${wallet}`
       : null;
@@ -35,6 +39,26 @@ export default function HistoryPage() {
   );
   const hasEvents = Boolean(data?.events.length);
   const showDisconnectedState = Boolean(!wallet && !sampleMode);
+
+  useEffect(() => {
+    if (wallet) return;
+    const storedWallet = window.sessionStorage.getItem(SIMULATED_WALLET_KEY);
+    if (!storedWallet) return;
+    setSampleWallet(storedWallet);
+    setSampleMode(true);
+  }, [wallet]);
+
+  function handleSimulateWallet(walletAddress: string) {
+    window.sessionStorage.setItem(SIMULATED_WALLET_KEY, walletAddress);
+    setSampleWallet(walletAddress);
+    setSampleMode(true);
+  }
+
+  function handleBackToWalletView() {
+    window.sessionStorage.removeItem(SIMULATED_WALLET_KEY);
+    setSampleWallet(null);
+    setSampleMode(false);
+  }
 
   return (
     <AppShell title="Claim history">
@@ -50,7 +74,7 @@ export default function HistoryPage() {
             {sampleMode ? (
               <button
                 type="button"
-                onClick={() => setSampleMode(false)}
+                onClick={handleBackToWalletView}
                 className="inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-line px-5 text-sm font-semibold text-white transition hover:border-brand/40 hover:bg-brand/10"
               >
                 <ArrowLeft className="h-4 w-4" />
@@ -63,6 +87,7 @@ export default function HistoryPage() {
         {sampleMode ? (
           <div className="rounded-lg border border-brand/25 bg-brand/10 px-5 py-4 text-sm leading-6 text-brand">
             Sample mode is active. You are viewing a realistic claim history walkthrough, not wallet-owned data.
+            {sampleWallet ? ` Simulated wallet: ${sampleWallet.slice(0, 6)}...${sampleWallet.slice(-4)}.` : ""}
           </div>
         ) : null}
 
@@ -72,13 +97,14 @@ export default function HistoryPage() {
         {showDisconnectedState ? (
           <EmptyHistoryState
             onSampleMode={() => setSampleMode(true)}
+            onSimulateWallet={handleSimulateWallet}
             title="Connect a wallet to view claim history"
             description="BagsSignal can show fee claim history after wallet connection. You can also open sample mode to inspect the history experience without connecting a wallet."
           />
         ) : null}
 
         {!isLoading && !error && data && !hasEvents && !sampleMode ? (
-          <EmptyHistoryState onSampleMode={() => setSampleMode(true)} />
+          <EmptyHistoryState onSampleMode={() => setSampleMode(true)} onSimulateWallet={handleSimulateWallet} />
         ) : null}
 
         {data && hasEvents ? (
@@ -87,7 +113,7 @@ export default function HistoryPage() {
               <span>Token</span>
               <span>Amount</span>
               <span>Time</span>
-              <span>{sampleMode ? "Token Page" : "Transaction"}</span>
+              <span>Transaction</span>
             </div>
             {data.events.map((event) => (
               <div key={event.txHash} className="grid grid-cols-1 gap-3 border-b border-line px-5 py-4 text-sm last:border-b-0 md:grid-cols-[1.2fr_0.8fr_1fr_0.8fr]">
@@ -95,7 +121,7 @@ export default function HistoryPage() {
                 <span className="font-mono text-brand">{formatSOL(event.amountSOL)}</span>
                 <span className="text-muted">{new Date(event.timestamp).toLocaleString("en-US")}</span>
                 <a href={event.solscanUrl} target="_blank" rel="noreferrer" className="font-mono text-brand">
-                  {sampleMode ? "Open on Bags" : formatAddress(event.txHash, 6, 6)}
+                  {formatAddress(event.txHash, 6, 6)}
                 </a>
               </div>
             ))}
@@ -108,10 +134,12 @@ export default function HistoryPage() {
 
 function EmptyHistoryState({
   onSampleMode,
+  onSimulateWallet,
   title = "No Bags activity found for this wallet",
   description = "This wallet does not have Bags creator revenue or claim history yet. Use sample mode to review the full claim, token, revenue, and advisor experience without tying it to the connected wallet."
 }: {
   onSampleMode: () => void;
+  onSimulateWallet?: (wallet: string) => void;
   title?: string;
   description?: string;
 }) {
@@ -154,6 +182,7 @@ function EmptyHistoryState({
               <ExternalLink className="h-4 w-4" />
             </a>
           </div>
+          {onSimulateWallet ? <SimulationWalletPicker onSelect={onSimulateWallet} /> : null}
         </div>
       </div>
     </Panel>

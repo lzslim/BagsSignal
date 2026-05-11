@@ -1,13 +1,16 @@
 import { BarChart3, CircleAlert, ExternalLink, FlaskConical } from "lucide-react";
 import Link from "next/link";
 import { Panel } from "@/components/shared/Panel";
+import { SimulationWalletPicker } from "@/components/dashboard/SimulationWalletPicker";
 
 export function EmptyCreatorState({
   onSampleMode,
+  onSimulateWallet,
   title = "No Bags activity found for this wallet",
   description = "This wallet does not have Bags creator revenue or claim history yet. Use sample mode to review the full claim, token, revenue, and advisor experience without tying it to the connected wallet."
 }: {
   onSampleMode: () => void;
+  onSimulateWallet?: (wallet: string) => void;
   title?: string;
   description?: string;
 }) {
@@ -50,6 +53,7 @@ export function EmptyCreatorState({
               <ExternalLink className="h-4 w-4" />
             </a>
           </div>
+          {onSimulateWallet ? <SimulationWalletPicker onSelect={onSimulateWallet} /> : null}
         </div>
       </div>
     </Panel>

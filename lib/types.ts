@@ -38,6 +38,7 @@ export type TokenPosition = {
 
 export type DashboardResponse = {
   demoMode: boolean;
+  simulatedWallet?: string | null;
   summary: DashboardSummary;
   tokens: TokenPosition[];
   chart: Array<{ date: string; amount: number }>;
@@ -55,6 +56,7 @@ export type ClaimEvent = {
 export type ClaimHistoryResponse = {
   demoMode?: boolean;
   source?: "bags-api" | "leaderboard-cache" | "demo";
+  simulatedWallet?: string | null;
   events: ClaimEvent[];
   pagination: {
     page: number;
@@ -62,6 +64,17 @@ export type ClaimHistoryResponse = {
     total: number;
     totalPages: number;
   };
+};
+
+export type SimulatedWallet = {
+  wallet: string;
+  walletShort: string;
+  label: string;
+  provider: string | null;
+  tokenCount: number;
+  lifetimeEarnedSOL: number;
+  claimableSOL: number;
+  topTokenSymbol: string;
 };
 
 export type TokenDetail = TokenPosition & {

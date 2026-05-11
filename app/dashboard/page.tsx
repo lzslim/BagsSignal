@@ -2,7 +2,7 @@
 
 import { useWallet } from "@solana/wallet-adapter-react";
 import { ArrowLeft, BarChart3, Coins, WalletCards } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { AppShell } from "@/components/layout/AppShell";
 import { RevenueChart } from "@/components/dashboard/RevenueChart";
 import { SummaryCards } from "@/components/dashboard/SummaryCards";
@@ -16,14 +16,17 @@ import { useDashboard, useSampleDashboard } from "@/hooks/useDashboard";
 import { useRedirectOnDisconnect } from "@/hooks/useRedirectOnDisconnect";
 import { formatSOL } from "@/lib/utils";
 
+const SIMULATED_WALLET_KEY = "bagssignal.simulatedWallet";
+
 export default function DashboardPage() {
   const { publicKey } = useWallet();
   useRedirectOnDisconnect();
   const [sampleMode, setSampleMode] = useState(false);
+  const [sampleWallet, setSampleWallet] = useState<string | null>(null);
   const connectedWallet = publicKey?.toBase58() ?? null;
   const wallet = sampleMode ? null : connectedWallet;
   const { data: walletData, error, isLoading, mutate } = useDashboard(wallet);
-  const sample = useSampleDashboard(sampleMode);
+  const sample = useSampleDashboard(sampleMode, sampleWallet);
   const data = sampleMode ? sample.data : walletData;
   const loading = sampleMode ? sample.isLoading : isLoading;
   const loadError = sampleMode ? sample.error : error;
@@ -32,11 +35,60 @@ export default function DashboardPage() {
     type: "idle"
   });
 
+  useEffect(() => {
+    if (connectedWallet) return;
+    const storedWallet = window.sessionStorage.getItem(SIMULATED_WALLET_KEY);
+    if (!storedWallet) return;
+    setSampleWallet(storedWallet);
+    setSampleMode(true);
+  }, [connectedWallet]);
+
+  useEffect(() => {
+    if (notice.type === "idle" || notice.type === "loading") return;
+
+    const timeout = window.setTimeout(() => {
+      setNotice({ type: "idle" });
+    }, notice.type === "success" ? 4500 : 5200);
+
+    return () => window.clearTimeout(timeout);
+  }, [notice.type, notice.message]);
+
+  function handleSimulateWallet(walletAddress: string) {
+    window.sessionStorage.setItem(SIMULATED_WALLET_KEY, walletAddress);
+    setSampleWallet(walletAddress);
+    setSampleMode(true);
+  }
+
+  function handleBackToWalletView() {
+    window.sessionStorage.removeItem(SIMULATED_WALLET_KEY);
+    setSampleWallet(null);
+    setSampleMode(false);
+  }
+
   async function handleClaimOne(mint: string) {
     if (sampleMode) {
-      setNotice({ type: "error", message: "Sample creator data cannot be claimed." });
+      setNotice({
+        type: "error",
+        message: sampleWallet
+          ? `You are viewing simulated data for ${sampleWallet.slice(0, 6)}...${sampleWallet.slice(-4)}. Connect that wallet to claim its Bags fees.`
+          : "You are viewing sample creator data, not the connected wallet's own Bags positions. Connect the owner wallet to claim fees."
+      });
       return;
     }
+
+    if (data?.demoMode) {
+      setNotice({
+        type: "error",
+        message: "Claim is unavailable because this dashboard is not showing live data for your connected wallet. Add the Bags API key and reload your own wallet data before claiming."
+      });
+      return;
+    }
+
+    if (!connectedWallet) {
+      setNotice({ type: "error", message: "Connect your own wallet before claiming Bags creator fees." });
+      return;
+    }
+
     try {
       setNotice({ type: "loading", message: `Claiming fees for ${mint.slice(0, 4)}...` });
       const signatures = await claimOne(mint);
@@ -97,7 +149,11 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        <ClaimNotice type={notice.type} message={notice.message} />
+        {notice.type !== "idle" && notice.message ? (
+          <div className="fixed right-4 top-20 z-50 w-[calc(100vw-2rem)] max-w-md rounded-xl shadow-[0_24px_80px_rgba(0,0,0,0.45)]">
+            <ClaimNotice type={notice.type} message={notice.message} />
+          </div>
+        ) : null}
 
         {loading ? <LoadingState /> : null}
         {loadError ? <ErrorState message={loadError.message} /> : null}
@@ -105,12 +161,13 @@ export default function DashboardPage() {
         {showDisconnectedState ? (
           <EmptyCreatorState
             onSampleMode={() => setSampleMode(true)}
+            onSimulateWallet={handleSimulateWallet}
             title="Connect a wallet to view your creator dashboard"
             description="BagsSignal can show your personal Bags creator revenue after wallet connection. You can also open sample mode to review the real dashboard experience without connecting a wallet."
           />
         ) : null}
 
-        {showEmptyCreatorState ? <EmptyCreatorState onSampleMode={() => setSampleMode(true)} /> : null}
+        {showEmptyCreatorState ? <EmptyCreatorState onSampleMode={() => setSampleMode(true)} onSimulateWallet={handleSimulateWallet} /> : null}
 
         {data && hasCreatorData ? (
           <>
@@ -118,10 +175,11 @@ export default function DashboardPage() {
               <div className="flex flex-col gap-3 rounded-xl border border-warning/30 bg-warning/10 px-4 py-3 text-sm text-orange-100 shadow-[0_18px_45px_rgba(0,0,0,0.16)] sm:flex-row sm:items-center sm:justify-between">
                 <span className="leading-6">
                   Sample mode is active. You are viewing a realistic creator revenue walkthrough, not wallet-owned data.
+                  {sampleWallet ? ` Simulated wallet: ${sampleWallet.slice(0, 6)}...${sampleWallet.slice(-4)}.` : ""}
                 </span>
                 <button
                   type="button"
-                  onClick={() => setSampleMode(false)}
+                  onClick={handleBackToWalletView}
                   className="inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-white/15 bg-black/20 px-5 text-sm font-semibold text-white transition hover:border-brand/40 hover:bg-brand/10"
                 >
                   <ArrowLeft className="h-4 w-4" />
@@ -136,7 +194,11 @@ export default function DashboardPage() {
             <SummaryCards summary={data.summary} />
             <div className="grid grid-cols-1 gap-6 2xl:grid-cols-[minmax(0,1.32fr)_minmax(360px,0.68fr)]">
               <div className="space-y-6">
-                <TokenList tokens={data.tokens} onClaim={handleClaimOne} />
+                <TokenList
+                  tokens={data.tokens}
+                  onClaim={handleClaimOne}
+                  claimBlocked={sampleMode || Boolean(data.demoMode) || !connectedWallet}
+                />
                 <RevenueChart data={data.chart} />
               </div>
               <AIAdvisorCard />

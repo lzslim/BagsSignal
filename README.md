@@ -56,9 +56,13 @@ The AI Revenue Advisor turns creator revenue context into short, action-oriented
 
 The advisor is designed to be concise and practical. It does not simply repeat metrics; it translates fee and token activity into creator actions.
 
+Because AI API usage has a real cost, Dashboard advisor content is not pre-generated for every wallet. Recommendations are generated in the product flow when the creator asks for a fresh read.
+
 ## Leaderboard
 
 The Leaderboard ranks active Bags token creators using creator revenue, claimable fees, trading activity, and momentum. It is designed to highlight tokens that are not only historically successful, but also currently active.
+
+Due to API cost limits, leaderboard data is refreshed every 12 hours instead of being continuously re-indexed in real time.
 
 The page includes:
 
@@ -136,16 +140,7 @@ Each leaderboard token can expose an AI Signal with:
 - Recommended action.
 - Evidence metrics.
 
-The signal uses features such as:
-
-- 1h, 6h, 24h, and 7d volume.
-- 1h, 6h, 24h, and 7d trade count.
-- Volume growth ratios.
-- Trade velocity.
-- Revenue velocity.
-- Metadata quality.
-- Creator social context.
-- Liquidity and momentum risk flags.
+The signal combines creator revenue, claimable fees, trading activity, momentum, metadata quality, and creator context into a compact market read.
 
 ## History
 
@@ -160,45 +155,34 @@ This gives creators a clean way to review past fee collection and understand how
 
 ## Data Pipeline
 
-BagsSignal combines Bags API data, Solana on-chain metadata, Bitquery trading data, and Supabase cloud storage.
+BagsSignal combines Bags API data, Solana on-chain metadata, Bitquery trading data, and Supabase.
 
 ### Bags API
 
-Bags API powers core creator and fee data:
+Bags API powers the core creator workflow:
 
 - Claimable positions.
 - Lifetime token fees.
 - Token creators.
-- Token launch feed.
 - Claim events.
 - Claim transaction preparation.
 
 ### On-Chain Metadata
 
-Token images are resolved from Solana token metadata through `@solana/web3.js`. BagsSignal reads the Metaplex metadata PDA, extracts the metadata URI, and resolves token image data when available.
-
-Claim history also keeps an on-chain context by preserving transaction signatures and linking claim activity back to the relevant Solana transaction or Bags token page. This connects fee collection history with the token-level metadata used across the Dashboard and Leaderboard.
+Solana metadata is used to enrich token identity, including token images and transaction links for claim history.
 
 ### Bitquery
 
-Bitquery GraphQL is used to discover active Bags mints and collect trading metrics:
+Bitquery is used to discover active Bags tokens and collect market activity:
 
-- Bags-related token launch activity.
-- Active Bags token trading.
-- 1h, 6h, 24h, and 7d DEX volume.
 - Trade counts.
-- Last trade time.
+- Volume.
+- Momentum windows.
+- Recent activity.
 
 ### Supabase
 
-Enriched leaderboard rows and AI-ready features are stored in Supabase. The UI reads from this cloud data layer while the sync pipeline keeps the leaderboard current.
-
-Main tables:
-
-- `leaderboard_entries`
-- `token_ai_features`
-- `token_ai_recommendations`
-- `leaderboard_sync_runs`
+Supabase stores enriched leaderboard rows and AI-ready features so the app can load rankings quickly during the demo.
 
 ## Tech Stack
 

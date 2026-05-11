@@ -1,10 +1,10 @@
 "use client";
 
-import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 import { BarChart3, Clock3, Github, Trophy } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Logo } from "@/components/layout/Logo";
+import { ClientWalletButton } from "@/components/wallet/ClientWalletButton";
 import { cn } from "@/lib/utils";
 
 const navItems = [
@@ -36,7 +36,7 @@ export function AppShell({ children }: { title: string; children: React.ReactNod
               <span className="h-2 w-2 rounded-full bg-brand shadow-glow" />
               Mainnet
             </div>
-            <WalletMultiButton />
+            <ClientWalletButton />
           </div>
         </div>
       </header>

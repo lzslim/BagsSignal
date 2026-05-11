@@ -5,10 +5,12 @@ import { Panel } from "@/components/shared/Panel";
 
 export function TokenList({
   tokens,
-  onClaim
+  onClaim,
+  claimBlocked = false
 }: {
   tokens: TokenPosition[];
   onClaim: (mint: string) => void;
+  claimBlocked?: boolean;
 }) {
   return (
     <div className="space-y-4">
@@ -75,7 +77,12 @@ export function TokenList({
                 <button
                   type="button"
                   onClick={() => onClaim(token.mint)}
-                  className="h-11 rounded-lg border border-brand/40 bg-brand/10 px-4 text-sm font-semibold text-brand transition hover:bg-brand hover:text-black"
+                  title={claimBlocked ? "Claim requires the owner wallet for the currently viewed creator data." : "Claim Bags creator fees"}
+                  className={
+                    claimBlocked
+                      ? "h-11 rounded-lg border border-warning/35 bg-warning/10 px-4 text-sm font-semibold text-orange-100 transition hover:border-warning/60 hover:bg-warning/20"
+                      : "h-11 rounded-lg border border-brand/40 bg-brand/10 px-4 text-sm font-semibold text-brand transition hover:bg-brand hover:text-black"
+                  }
                 >
                   Claim
                 </button>

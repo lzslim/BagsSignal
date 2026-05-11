@@ -37,7 +37,11 @@ export function tokenLabel(mint: string, index = 0) {
 }
 
 export function safeDate(input: string | number | Date) {
-  const date = new Date(input);
+  const numericInput = typeof input === "number" ? input : typeof input === "string" && /^\d+$/.test(input) ? Number(input) : null;
+  const normalizedInput = numericInput !== null && numericInput > 0 && numericInput < 10_000_000_000
+    ? numericInput * 1000
+    : input;
+  const date = new Date(normalizedInput);
   return Number.isNaN(date.getTime()) ? new Date() : date;
 }
 
