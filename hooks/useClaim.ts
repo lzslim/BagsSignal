@@ -1,7 +1,7 @@
 "use client";
 
 import { useConnection, useWallet } from "@solana/wallet-adapter-react";
-import { VersionedTransaction } from "@solana/web3.js";
+import { Transaction, VersionedTransaction } from "@solana/web3.js";
 import { Buffer } from "buffer";
 import { useState } from "react";
 
@@ -82,9 +82,7 @@ export function useClaim() {
   }
 
   async function signAndBroadcast(transactions: PrepareClaimResponse["transactions"]) {
-    const decoded = transactions.map((item) =>
-      VersionedTransaction.deserialize(Buffer.from(item.tx, "base64"))
-    );
+    const decoded = transactions.map((item) => deserializePreparedTransaction(item.tx));
     const signed = await wallet.signAllTransactions!(decoded);
     const signatures: string[] = [];
 
@@ -111,4 +109,65 @@ export function useClaim() {
     claimOne,
     claimAll
   };
+}
+
+function deserializePreparedTransaction(encodedTx: string) {
+  const bytes = decodePreparedTransaction(encodedTx);
+
+  try {
+    return VersionedTransaction.deserialize(bytes);
+  } catch (versionedError) {
+    try {
+      return Transaction.from(bytes);
+    } catch {
+      throw versionedError instanceof Error
+        ? new Error(`Failed to decode prepared claim transaction: ${versionedError.message}`)
+        : new Error("Failed to decode prepared claim transaction");
+    }
+  }
+}
+
+function decodePreparedTransaction(encodedTx: string) {
+  const normalized = encodedTx.trim();
+  const base64 = normalized.replace(/-/g, "+").replace(/_/g, "/");
+  const paddedBase64 = base64.padEnd(base64.length + ((4 - (base64.length % 4)) % 4), "=");
+
+  if (/^[A-Za-z0-9+/]+={0,2}$/.test(paddedBase64)) {
+    const decoded = Buffer.from(paddedBase64, "base64");
+    if (decoded.length > 0 && decoded.toString("base64").replace(/=+$/, "") === paddedBase64.replace(/=+$/, "")) {
+      return decoded;
+    }
+  }
+
+  return decodeBase58(normalized);
+}
+
+function decodeBase58(value: string) {
+  const alphabet = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
+  const bytes = [0];
+
+  for (const char of value) {
+    const index = alphabet.indexOf(char);
+    if (index < 0) {
+      throw new Error("Prepared claim transaction is not valid base64 or base58");
+    }
+
+    let carry = index;
+    for (let byteIndex = 0; byteIndex < bytes.length; byteIndex += 1) {
+      carry += bytes[byteIndex] * 58;
+      bytes[byteIndex] = carry & 0xff;
+      carry >>= 8;
+    }
+    while (carry > 0) {
+      bytes.push(carry & 0xff);
+      carry >>= 8;
+    }
+  }
+
+  for (const char of value) {
+    if (char !== "1") break;
+    bytes.push(0);
+  }
+
+  return Buffer.from(bytes.reverse());
 }
