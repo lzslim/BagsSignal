@@ -32,6 +32,8 @@ type BagsCreator = {
 
 type PublicTokenProfile = {
   imageUrl: string | null;
+  name?: string | null;
+  symbol?: string | null;
 };
 
 export type BagsLaunchFeedToken = {
@@ -75,6 +77,8 @@ type ClaimTx = {
 };
 
 const TOKEN_METADATA_PROGRAM_ID = new PublicKey("metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s");
+const TOKEN_PROGRAM_ID = new PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
+const TOKEN_2022_PROGRAM_ID = new PublicKey("TokenzQdBNbLqP5VEhdkAS6EPTRV6aQH2zRVD9WnbU9");
 
 let metadataConnection: Connection | null = null;
 
@@ -237,17 +241,7 @@ export async function getTokenPublicProfile(tokenMint: string): Promise<PublicTo
 async function getTokenProfileFromChainMetadata(tokenMint: string): Promise<PublicTokenProfile> {
   try {
     const mint = new PublicKey(tokenMint);
-    const [metadataPda] = PublicKey.findProgramAddressSync(
-      [Buffer.from("metadata"), TOKEN_METADATA_PROGRAM_ID.toBuffer(), mint.toBuffer()],
-      TOKEN_METADATA_PROGRAM_ID
-    );
-    const account = await getMetadataConnection().getAccountInfo(metadataPda, "confirmed");
-
-    if (!account?.data) {
-      return { imageUrl: null };
-    }
-
-    const uri = parseMetaplexMetadataUri(account.data);
+    const uri = await getMetaplexMetadataUri(mint) ?? await getToken2022MetadataUri(mint);
     if (!uri) {
       return { imageUrl: null };
     }
@@ -257,13 +251,109 @@ async function getTokenProfileFromChainMetadata(tokenMint: string): Promise<Publ
       cache: "no-store",
       signal: AbortSignal.timeout(Number(process.env.TOKEN_METADATA_TIMEOUT_MS ?? "20000"))
     });
-    const metadata = await response.json() as { image?: string; image_url?: string };
+    if (!response.ok) {
+      return { imageUrl: null };
+    }
+    const metadata = await response.json() as { image?: string; image_url?: string; name?: string; symbol?: string };
     const imageUrl = metadata.image ?? metadata.image_url ?? null;
 
-    return { imageUrl: imageUrl ? normalizeMetadataUri(imageUrl) : null };
+    return {
+      imageUrl: imageUrl ? normalizeMetadataUri(imageUrl) : null,
+      name: metadata.name ?? null,
+      symbol: metadata.symbol ?? null
+    };
   } catch {
     return { imageUrl: null };
   }
+}
+
+async function getCreatorTokenMintsFromChain(wallet: string) {
+  try {
+    const updateAuthority = new PublicKey(wallet);
+    const accounts = await getMetadataConnection().getProgramAccounts(TOKEN_METADATA_PROGRAM_ID, {
+      filters: [
+        {
+          memcmp: {
+            offset: 1,
+            bytes: updateAuthority.toBase58()
+          }
+        }
+      ],
+      dataSlice: {
+        offset: 33,
+        length: 32
+      },
+      commitment: "confirmed"
+    });
+
+    return accounts
+      .map((account) => new PublicKey(account.account.data).toBase58())
+      .filter((mint, index, mints) => mints.indexOf(mint) === index);
+  } catch {
+    return [];
+  }
+}
+
+async function getOwnedTokenMintsFromChain(wallet: string) {
+  try {
+    const owner = new PublicKey(wallet);
+    const connection = getMetadataConnection();
+    const accountGroups = await Promise.all([
+      connection.getParsedTokenAccountsByOwner(owner, { programId: TOKEN_PROGRAM_ID }, "confirmed").catch(() => ({ value: [] })),
+      connection.getParsedTokenAccountsByOwner(owner, { programId: TOKEN_2022_PROGRAM_ID }, "confirmed").catch(() => ({ value: [] }))
+    ]);
+
+    return accountGroups
+      .flatMap((group) => group.value)
+      .map((account) => {
+        const info = account.account.data.parsed?.info;
+        const amount = Number(info?.tokenAmount?.uiAmount ?? 0);
+        const mint = info?.mint;
+        return typeof mint === "string" && amount > 0 ? mint : null;
+      })
+      .filter((mint): mint is string => Boolean(mint))
+      .filter((mint, index, mints) => mints.indexOf(mint) === index)
+      .slice(0, Number(process.env.DASHBOARD_OWNED_TOKEN_DISCOVERY_LIMIT ?? "40"));
+  } catch {
+    return [];
+  }
+}
+
+function walletBelongsToCreators(creators: Creator[], wallet: string) {
+  return creators.some((creator) => creator.wallet === wallet || creator.isMe);
+}
+
+async function getMetaplexMetadataUri(mint: PublicKey) {
+  const [metadataPda] = PublicKey.findProgramAddressSync(
+    [Buffer.from("metadata"), TOKEN_METADATA_PROGRAM_ID.toBuffer(), mint.toBuffer()],
+    TOKEN_METADATA_PROGRAM_ID
+  );
+  const account = await getMetadataConnection().getAccountInfo(metadataPda, "confirmed");
+
+  if (!account?.data) {
+    return null;
+  }
+
+  return parseMetaplexMetadataUri(account.data);
+}
+
+async function getToken2022MetadataUri(mint: PublicKey) {
+  const account = await getMetadataConnection().getParsedAccountInfo(mint, "confirmed");
+  const data = account.value?.data;
+  if (!data || Buffer.isBuffer(data) || !("parsed" in data)) return null;
+
+  const extensions = data.parsed?.info?.extensions;
+  if (!Array.isArray(extensions)) return null;
+
+  for (const extension of extensions) {
+    const state = extension?.state;
+    const uri = state?.uri;
+    if (typeof uri === "string" && uri.trim()) {
+      return uri.trim();
+    }
+  }
+
+  return null;
 }
 
 function parseMetaplexMetadataUri(data: Buffer) {
@@ -278,9 +368,12 @@ function parseMetaplexMetadataUri(data: Buffer) {
 }
 
 function readRustString(data: Buffer, offset: number) {
+  if (offset + 4 > data.length) {
+    return { value: "", nextOffset: data.length };
+  }
   const length = data.readUInt32LE(offset);
   const start = offset + 4;
-  const end = start + length;
+  const end = Math.min(start + length, data.length);
   return {
     value: data.subarray(start, end).toString("utf8").replace(/\0/g, "").trim(),
     nextOffset: end
@@ -304,34 +397,52 @@ export async function getDashboard(wallet: string): Promise<DashboardResponse> {
     throw new Error("BAGS_API_KEY is not configured");
   }
 
-  const positions = await getClaimablePositions(wallet);
-  const tokens = await Promise.all(
-    positions.map(async (position, index): Promise<TokenPosition> => {
-      const [lifetimeTotalSOL, creators] = await Promise.all([
-        getTokenLifetimeFees(position.baseMint).catch(() => 0),
-        getTokenCreators(position.baseMint, wallet).catch(() => [])
+  const [positions, creatorMints, ownedMints] = await Promise.all([
+    getClaimablePositions(wallet),
+    getCreatorTokenMintsFromChain(wallet),
+    getOwnedTokenMintsFromChain(wallet)
+  ]);
+  const positionMap = new Map(positions.map((position) => [position.baseMint, position]));
+  const tokenMints = Array.from(new Set([
+    ...positions.map((position) => position.baseMint),
+    ...creatorMints,
+    ...ownedMints
+  ]));
+  const tokenResults = await Promise.all(
+    tokenMints.map(async (tokenMint, index): Promise<TokenPosition | null> => {
+      const position = positionMap.get(tokenMint);
+      const discoveredFromWalletOnly = !position && !creatorMints.includes(tokenMint);
+      const [lifetimeTotalSOL, creators, publicProfile] = await Promise.all([
+        getTokenLifetimeFees(tokenMint).catch(() => 0),
+        getTokenCreators(tokenMint, wallet).catch(() => []),
+        getTokenPublicProfile(tokenMint).catch((): PublicTokenProfile => ({ imageUrl: null }))
       ]);
+      if (discoveredFromWalletOnly && !walletBelongsToCreators(creators, wallet)) {
+        return null;
+      }
       const me = creators.find((creator) => creator.isMe) ?? creators.find((creator) => creator.isCreator);
-      const royaltyBps = position.userBps ?? me?.royaltyBps ?? 0;
-      const labels = tokenLabel(position.baseMint, index);
+      const royaltyBps = position?.userBps ?? me?.royaltyBps ?? 0;
+      const labels = tokenLabel(tokenMint, index);
+      const tokenImage = publicProfile.imageUrl ?? creators.find((creator) => creator.pfp)?.pfp ?? null;
 
       return {
-        mint: position.baseMint,
-        symbol: labels.symbol,
-        name: labels.name,
-        pfp: creators.find((creator) => creator.pfp)?.pfp ?? null,
-        claimableSOL: lamportsToSol(position.totalClaimableLamportsUserShare),
+        mint: tokenMint,
+        symbol: publicProfile.symbol || labels.symbol,
+        name: publicProfile.name || labels.name,
+        pfp: tokenImage,
+        claimableSOL: lamportsToSol(position?.totalClaimableLamportsUserShare),
         lifetimeTotalSOL,
         lifetimeEarnedSOL: lifetimeTotalSOL * (royaltyBps / 10000),
         royaltyBps,
         royaltyPct: bpsToPct(royaltyBps),
-        isCustomFeeVault: Boolean(position.isCustomFeeVault),
-        isMigrated: Boolean(position.isMigrated),
+        isCustomFeeVault: Boolean(position?.isCustomFeeVault),
+        isMigrated: Boolean(position?.isMigrated),
         collaborators: Math.max(creators.length - 1, 0),
-        feeMode: position.isCustomFeeVault ? "Custom" : "Default"
+        feeMode: position?.isCustomFeeVault ? "Custom" : "Default"
       };
     })
   );
+  const tokens = tokenResults.filter((token): token is TokenPosition => Boolean(token));
 
   const summary = {
     totalClaimableSOL: tokens.reduce((sum, token) => sum + token.claimableSOL, 0),
@@ -357,11 +468,12 @@ export async function getTokenDetail(tokenMint: string, wallet?: string): Promis
     throw new Error("BAGS_API_KEY is not configured");
   }
 
-  const [lifetimeTotalSOL, creators, positions, claimHistory] = await Promise.all([
+  const [lifetimeTotalSOL, creators, positions, claimHistory, publicProfile] = await Promise.all([
     getTokenLifetimeFees(tokenMint).catch(() => 0),
     getTokenCreators(tokenMint, wallet).catch(() => []),
     wallet ? getClaimablePositions(wallet).catch(() => []) : Promise.resolve([]),
-    getClaimEvents(tokenMint, wallet, 20, 0).catch(() => [])
+    getClaimEvents(tokenMint, wallet, 20, 0).catch(() => []),
+    getTokenPublicProfile(tokenMint).catch((): PublicTokenProfile => ({ imageUrl: null }))
   ]);
 
   const position = positions.find((item) => item.baseMint === tokenMint);
@@ -373,7 +485,7 @@ export async function getTokenDetail(tokenMint: string, wallet?: string): Promis
     mint: tokenMint,
     symbol: labels.symbol,
     name: labels.name,
-    pfp: creators.find((creator) => creator.pfp)?.pfp ?? null,
+    pfp: publicProfile.imageUrl ?? creators.find((creator) => creator.pfp)?.pfp ?? null,
     claimableSOL: lamportsToSol(position?.totalClaimableLamportsUserShare),
     lifetimeTotalSOL,
     lifetimeEarnedSOL: lifetimeTotalSOL * (royaltyBps / 10000),
