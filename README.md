@@ -160,7 +160,7 @@ This gives creators a clean way to review past fee collection and understand how
 
 ## Data Pipeline
 
-BagsSignal combines Bags API data, Solana on-chain metadata, Bitquery trading data, and local SQLite storage.
+BagsSignal combines Bags API data, Solana on-chain metadata, Bitquery trading data, and Supabase cloud storage.
 
 ### Bags API
 
@@ -189,9 +189,9 @@ Bitquery GraphQL is used to discover active Bags mints and collect trading metri
 - Trade counts.
 - Last trade time.
 
-### SQLite
+### Supabase
 
-Enriched leaderboard rows and AI-ready features are stored locally in SQLite. The UI reads from this local data layer for fast page loads while the sync pipeline keeps the leaderboard current.
+Enriched leaderboard rows and AI-ready features are stored in Supabase. The UI reads from this cloud data layer while the sync pipeline keeps the leaderboard current.
 
 Main tables:
 
@@ -212,7 +212,7 @@ Main tables:
 - `@solana/web3.js`
 - Bags API
 - Bitquery GraphQL
-- SQLite
+- Supabase
 - Anthropic / OpenAI-compatible AI provider architecture
 
 ## Local Development

@@ -22,7 +22,7 @@ export default function SettingsPage() {
               Add `BAGS_API_KEY` to enable live Bags API data. Without it, the app runs in demo mode so the full user flow can still be reviewed during judging.
             </p>
             <p>
-              Add `BITQUERY_ACCESS_TOKEN` to enable the SQLite-backed leaderboard sync. The scheduler stores aggregated leaderboard rows in a local SQLite file and the leaderboard page reads from that local cache.
+              Add `BITQUERY_ACCESS_TOKEN` to enable leaderboard sync. The sync stores aggregated leaderboard rows in Supabase and the leaderboard page reads from the cloud database.
             </p>
             <p>
               Set `NEXT_PUBLIC_SOLANA_RPC_URL` and `SOLANA_RPC_URL` to a stable mainnet RPC endpoint before production deployment.
