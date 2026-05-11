@@ -14,7 +14,7 @@
 
 </div>
 
-BagsSignal is a creator intelligence dashboard for the Bags ecosystem. It helps creators understand fee revenue, claimable earnings, token momentum, and market signals across Bags-launched tokens.
+BagsSignal is a creator revenue intelligence layer for the Bags ecosystem. It helps creators understand fee revenue, claimable earnings, token momentum, and market signals across Bags-launched tokens.
 
 Creators on Bags can earn from token activity, but the important signals are spread across wallets, token pages, claim events, and trading data. BagsSignal brings those signals into one workflow so creators can answer:
 
@@ -56,13 +56,11 @@ The AI Revenue Advisor turns creator revenue context into short, action-oriented
 
 The advisor is designed to be concise and practical. It does not simply repeat metrics; it translates fee and token activity into creator actions.
 
-Because AI API usage has a real cost, Dashboard advisor content is not pre-generated for every wallet. Recommendations are generated in the product flow when the creator asks for a fresh read.
-
 ## Leaderboard
 
 The Leaderboard ranks active Bags token creators using creator revenue, claimable fees, trading activity, and momentum. It is designed to highlight tokens that are not only historically successful, but also currently active.
 
-Due to API cost limits, leaderboard data is refreshed every 12 hours instead of being continuously re-indexed in real time.
+Due to API cost limits, leaderboard data is refreshed every 12 hours instead of being continuously re-indexed.
 
 The page includes:
 
@@ -141,6 +139,12 @@ Each leaderboard token can expose an AI Signal with:
 - Evidence metrics.
 
 The signal combines creator revenue, claimable fees, trading activity, momentum, metadata quality, and creator context into a compact market read.
+
+## Data & AI Methodology
+
+BagsSignal uses periodically synced real Bags ecosystem data rather than static dashboard content. The current hackathon version refreshes leaderboard data every 12 hours to balance data quality, API cost, and demo stability.
+
+AI recommendation cards are generated from creator, token, fee, and momentum signals. For the demo, these insights are designed to be fast, stable, and cost-efficient while preserving the product workflow creators would use in production. The architecture can support scheduled LLM regeneration or on-demand AI analysis as usage grows.
 
 ## History
 
