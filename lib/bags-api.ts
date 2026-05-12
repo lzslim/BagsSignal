@@ -1,6 +1,7 @@
 import { Connection, PublicKey } from "@solana/web3.js";
 import { BAGS_API_BASE_URL, DEFAULT_RPC_URL, SOLSCAN_BASE } from "@/lib/constants";
 import { buildClaimEventChart } from "@/lib/revenue-chart";
+import { hasSupabaseConfig, supabaseSelect } from "@/lib/supabase-rest";
 import type { ClaimEvent, Creator, DashboardResponse, TokenDetail, TokenPosition } from "@/lib/types";
 import { bpsToPct, lamportsToSol, safeDate, tokenLabel } from "@/lib/utils";
 
@@ -76,11 +77,16 @@ type ClaimTx = {
   };
 };
 
+type StoredCreatorTokenRow = {
+  mint: string;
+};
+
 const TOKEN_METADATA_PROGRAM_ID = new PublicKey("metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s");
 const TOKEN_PROGRAM_ID = new PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
 const TOKEN_2022_PROGRAM_ID = new PublicKey("TokenzQdBNbLqP5VEhdkAS6EPTRV6aQH2zRVD9WnbU9");
 
 let metadataConnection: Connection | null = null;
+const walletTokenMintCache = new Map<string, { expiresAt: number; mints: string[] }>();
 
 function getMetadataConnection() {
   if (!metadataConnection) {
@@ -117,14 +123,16 @@ async function bagsFetch<T>(path: string, init?: RequestInit): Promise<T> {
       const payload = (await response.json()) as BagsEnvelope<T>;
 
       if (!response.ok || !payload.success) {
-        throw new Error(payload.error ?? `Bags API request failed: ${response.status}`);
+        const error = new Error(payload.error ?? `Bags API request failed: ${response.status}`);
+        error.name = response.status === 429 ? "BagsRateLimitError" : "BagsApiError";
+        throw error;
       }
 
       return payload.response as T;
     } catch (error) {
       lastError = error;
       if (attempt < 2) {
-        await delay(500 * (attempt + 1));
+        await delay(getRetryDelayMs(error, attempt));
       }
     }
   }
@@ -319,6 +327,61 @@ async function getOwnedTokenMintsFromChain(wallet: string) {
   }
 }
 
+async function getCreatorTokenMintsFromStore(wallet: string) {
+  if (!hasSupabaseConfig()) return [];
+
+  try {
+    const rows = await supabaseSelect<StoredCreatorTokenRow>(
+      "leaderboard_entries",
+      `select=mint&creator_wallet=eq.${encodeURIComponent(wallet)}&limit=80`
+    );
+    return rows
+      .map((row) => row.mint)
+      .filter(Boolean)
+      .filter((mint, index, mints) => mints.indexOf(mint) === index);
+  } catch {
+    return [];
+  }
+}
+
+async function getWalletTokenMints(wallet: string, positions: ClaimablePosition[]) {
+  const cached = walletTokenMintCache.get(wallet);
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached.mints;
+  }
+
+  const positionMints = positions.map((position) => position.baseMint);
+  const storeMints = await getCreatorTokenMintsFromStore(wallet);
+  let discoveredMints: string[] = [];
+
+  if (shouldUseChainDiscovery(storeMints, positionMints)) {
+    const [creatorMints, ownedMints] = await Promise.all([
+      getCreatorTokenMintsFromChain(wallet).catch(() => []),
+      getOwnedTokenMintsFromChain(wallet).catch(() => [])
+    ]);
+    const trustedMints = new Set([...positionMints, ...storeMints, ...creatorMints]);
+    const ownedOnlyMints = ownedMints.filter((mint) => !trustedMints.has(mint));
+    const verifiedOwnedMints = (await mapWithConcurrency(ownedOnlyMints, getBagsApiConcurrency(), async (tokenMint) => {
+      const creators = await getTokenCreators(tokenMint, wallet).catch(() => []);
+      return walletBelongsToCreators(creators, wallet) ? tokenMint : null;
+    })).filter((tokenMint): tokenMint is string => Boolean(tokenMint));
+    discoveredMints = [...creatorMints, ...verifiedOwnedMints];
+  }
+
+  const mints = Array.from(new Set([...positionMints, ...storeMints, ...discoveredMints]));
+  walletTokenMintCache.set(wallet, {
+    expiresAt: Date.now() + Number(process.env.DASHBOARD_TOKEN_MINT_CACHE_MS ?? "300000"),
+    mints
+  });
+  return mints;
+}
+
+function shouldUseChainDiscovery(storeMints: string[], positionMints: string[]) {
+  if (process.env.DASHBOARD_ENABLE_CHAIN_DISCOVERY === "true") return true;
+  if (process.env.DASHBOARD_ENABLE_CHAIN_DISCOVERY === "false") return false;
+  return storeMints.length === 0 && positionMints.length > 0;
+}
+
 function walletBelongsToCreators(creators: Creator[], wallet: string) {
   return creators.some((creator) => creator.wallet === wallet || creator.isMe);
 }
@@ -397,27 +460,20 @@ export async function getDashboard(wallet: string): Promise<DashboardResponse> {
     throw new Error("BAGS_API_KEY is not configured");
   }
 
-  const [positions, creatorMints, ownedMints] = await Promise.all([
-    getClaimablePositions(wallet),
-    getCreatorTokenMintsFromChain(wallet),
-    getOwnedTokenMintsFromChain(wallet)
-  ]);
+  const positions = await getClaimablePositions(wallet);
   const positionMap = new Map(positions.map((position) => [position.baseMint, position]));
-  const tokenMints = Array.from(new Set([
-    ...positions.map((position) => position.baseMint),
-    ...creatorMints,
-    ...ownedMints
-  ]));
-  const tokenResults = await Promise.all(
-    tokenMints.map(async (tokenMint, index): Promise<TokenPosition | null> => {
+  const tokenMints = await getWalletTokenMints(wallet, positions);
+  const tokenResults = await mapWithConcurrency(
+    tokenMints,
+    getBagsApiConcurrency(),
+    async (tokenMint, index): Promise<TokenPosition | null> => {
       const position = positionMap.get(tokenMint);
-      const discoveredFromWalletOnly = !position && !creatorMints.includes(tokenMint);
       const [lifetimeTotalSOL, creators, publicProfile] = await Promise.all([
         getTokenLifetimeFees(tokenMint).catch(() => 0),
         getTokenCreators(tokenMint, wallet).catch(() => []),
         getTokenPublicProfile(tokenMint).catch((): PublicTokenProfile => ({ imageUrl: null }))
       ]);
-      if (discoveredFromWalletOnly && !walletBelongsToCreators(creators, wallet)) {
+      if (!position && !walletBelongsToCreators(creators, wallet)) {
         return null;
       }
       const me = creators.find((creator) => creator.isMe) ?? creators.find((creator) => creator.isCreator);
@@ -440,7 +496,7 @@ export async function getDashboard(wallet: string): Promise<DashboardResponse> {
         collaborators: Math.max(creators.length - 1, 0),
         feeMode: position?.isCustomFeeVault ? "Custom" : "Default"
       };
-    })
+    }
   );
   const tokens = tokenResults.filter((token): token is TokenPosition => Boolean(token));
 
@@ -451,8 +507,10 @@ export async function getDashboard(wallet: string): Promise<DashboardResponse> {
     tokenCount: tokens.length,
     collaboratorCount: tokens.reduce((sum, token) => sum + token.collaborators, 0)
   };
-  const claimEvents = (await Promise.all(
-    tokens.map((token) => getClaimEvents(token.mint, wallet, 100, 0).catch(() => []))
+  const claimEvents = (await mapWithConcurrency(
+    tokens,
+    getBagsApiConcurrency(),
+    (token) => getClaimEvents(token.mint, wallet, 100, 0).catch(() => [])
   )).flat();
 
   return {
@@ -505,12 +563,23 @@ export async function getHistory(wallet: string, mint?: string, page = 1, pageSi
     return paginateEvents([], page, pageSize);
   }
 
-  const tokenMints = mint ? [mint] : (await getClaimablePositions(wallet)).map((item) => item.baseMint);
-  const events = (await Promise.all(
-    tokenMints.map((tokenMint) => getClaimEvents(tokenMint, wallet, 100, 0).catch(() => []))
+  const positions = mint ? [] : await getClaimablePositions(wallet).catch(() => []);
+  const tokenMints = mint ? [mint] : await getWalletTokenMints(wallet, positions);
+  const events = (await mapWithConcurrency(
+    tokenMints,
+    getBagsApiConcurrency(),
+    (tokenMint) => getClaimEvents(tokenMint, wallet, 100, 0).catch(() => [])
   )).flat();
 
   return paginateEvents(events, page, pageSize);
+}
+
+function getRetryDelayMs(error: unknown, attempt: number) {
+  const message = error instanceof Error ? error.message.toLowerCase() : "";
+  const isRateLimited =
+    error instanceof Error && (error.name === "BagsRateLimitError" || message.includes("429") || message.includes("too many"));
+
+  return isRateLimited ? 1_500 * (attempt + 1) : 500 * (attempt + 1);
 }
 
 function paginateEvents(events: ClaimEvent[], page: number, pageSize: number) {
@@ -532,4 +601,31 @@ function paginateEvents(events: ClaimEvent[], page: number, pageSize: number) {
 
 function delay(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function getBagsApiConcurrency() {
+  return Math.max(1, Number(process.env.BAGS_API_CONCURRENCY ?? "3"));
+}
+
+async function mapWithConcurrency<T, R>(
+  items: T[],
+  concurrency: number,
+  mapper: (item: T, index: number) => Promise<R>
+) {
+  const results = new Array<R>(items.length);
+  let cursor = 0;
+
+  async function worker() {
+    while (cursor < items.length) {
+      const index = cursor;
+      cursor += 1;
+      results[index] = await mapper(items[index], index);
+    }
+  }
+
+  await Promise.all(
+    Array.from({ length: Math.min(Math.max(concurrency, 1), items.length) }, () => worker())
+  );
+
+  return results;
 }

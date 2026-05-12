@@ -25,9 +25,31 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ tokens, totalTokens: tokens.length });
   } catch (error) {
+    const message = normalizeClaimPrepareError(error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Failed to prepare all claims" },
-      { status: 500 }
+      { error: message },
+      { status: isTransientClaimState(message) ? 409 : 500 }
     );
   }
+}
+
+function normalizeClaimPrepareError(error: unknown) {
+  const message = error instanceof Error ? error.message : "Failed to prepare all claims";
+  const lower = message.toLowerCase();
+
+  if (
+    lower.includes("no claimable") ||
+    lower.includes("nothing to claim") ||
+    lower.includes("already claimed") ||
+    lower.includes("claimable") ||
+    lower.includes("fees")
+  ) {
+    return "No claimable fees are available right now. If you just claimed, Bags may still be updating fee state.";
+  }
+
+  return message;
+}
+
+function isTransientClaimState(message: string) {
+  return message.toLowerCase().includes("no claimable fees");
 }

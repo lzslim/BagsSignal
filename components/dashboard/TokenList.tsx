@@ -6,12 +6,16 @@ import { Panel } from "@/components/shared/Panel";
 export function TokenList({
   tokens,
   onClaim,
-  claimBlocked = false
+  claimBlocked = false,
+  settlingMints = []
 }: {
   tokens: TokenPosition[];
   onClaim: (mint: string) => void;
   claimBlocked?: boolean;
+  settlingMints?: string[];
 }) {
+  const settlingSet = new Set(settlingMints);
+
   return (
     <div className="space-y-4">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
@@ -25,6 +29,9 @@ export function TokenList({
       </div>
       {tokens.map((token) => {
         const bagsUrl = `https://bags.fm/${token.mint}`;
+        const isSettling = settlingSet.has(token.mint);
+        const hasClaimableFees = token.claimableSOL > 0;
+        const isDisabled = claimBlocked || isSettling || !hasClaimableFees;
         return (
           <Panel key={token.mint} className="group overflow-hidden p-0 transition duration-200 hover:-translate-y-0.5 hover:border-brand/30 hover:bg-panelHover">
             <div className="grid gap-5 p-4 sm:p-5 xl:grid-cols-[minmax(260px,1fr)_minmax(230px,0.8fr)_auto] xl:items-center">
@@ -76,15 +83,28 @@ export function TokenList({
               <div className="flex items-center gap-3 xl:justify-end">
                 <button
                   type="button"
+                  disabled={isDisabled}
                   onClick={() => onClaim(token.mint)}
-                  title={claimBlocked ? "Claim requires the owner wallet for the currently viewed creator data." : "Claim Bags creator fees"}
+                  title={
+                    isSettling
+                      ? "Claim is confirmed and Bags is updating this token's fee state."
+                      : !hasClaimableFees
+                        ? "No claimable Bags fees are available for this token right now."
+                      : claimBlocked
+                        ? "Claim requires the owner wallet for the currently viewed creator data."
+                        : "Claim Bags creator fees"
+                  }
                   className={
-                    claimBlocked
+                    isSettling
+                      ? "h-11 cursor-not-allowed rounded-lg border border-brand/25 bg-brand/10 px-4 text-sm font-semibold text-brand/80"
+                      : !hasClaimableFees
+                      ? "h-11 cursor-not-allowed rounded-lg border border-white/10 bg-white/[0.025] px-4 text-sm font-semibold text-muted"
+                      : claimBlocked
                       ? "h-11 rounded-lg border border-warning/35 bg-warning/10 px-4 text-sm font-semibold text-orange-100 transition hover:border-warning/60 hover:bg-warning/20"
                       : "h-11 rounded-lg border border-brand/40 bg-brand/10 px-4 text-sm font-semibold text-brand transition hover:bg-brand hover:text-black"
                   }
                 >
-                  Claim
+                  {isSettling ? "Settling" : hasClaimableFees ? "Claim" : "No fees"}
                 </button>
                 <a
                   href={bagsUrl}

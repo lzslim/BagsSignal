@@ -1,7 +1,7 @@
 "use client";
 
 import { useWallet } from "@solana/wallet-adapter-react";
-import { ArrowRight, Github, ScanLine, ShieldCheck, Sparkles } from "lucide-react";
+import { ArrowRight, ExternalLink, Github, ScanLine, ShieldCheck, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { Suspense, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -21,6 +21,9 @@ const intelligenceLayers = [
   { label: "Creator Lens", value: "identity, metadata quality, Bags token context" },
   { label: "AI Lens", value: "actionable recommendations instead of metric dumps" }
 ];
+
+const projectTokenMint = "vqxHxnV7B6yCRC3XN5sjVa4QvvSahEDURuo1FkaBAGS";
+const projectTokenUrl = `https://bags.fm/${projectTokenMint}`;
 
 export default function HomePage() {
   return (
@@ -53,15 +56,6 @@ function HomeShell() {
         <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6">
           <Logo />
           <div className="flex items-center gap-3">
-            <a
-              href="https://github.com/lzslim/BagsSignal"
-              target="_blank"
-              rel="noreferrer"
-              aria-label="BagsSignal GitHub"
-              className="grid h-10 w-10 place-items-center border border-white/10 bg-white/[0.03] text-muted transition hover:border-brand/40 hover:bg-brand/10 hover:text-white"
-            >
-              <Github className="h-5 w-5" />
-            </a>
             <ClientWalletButton />
           </div>
         </div>
@@ -143,6 +137,62 @@ function HomeShell() {
               <div className="mt-3 text-sm leading-6 text-muted">{layer.value}</div>
             </div>
           ))}
+        </div>
+
+        <div className="mt-16 border border-white/10 bg-[linear-gradient(135deg,rgba(2,255,64,0.08),rgba(255,255,255,0.015)_36%,rgba(0,0,0,0.25))] p-1 shadow-[0_24px_80px_rgba(0,0,0,0.34)]">
+          <div className="grid gap-6 bg-[#08090b]/82 p-5 backdrop-blur md:grid-cols-[0.78fr_1.22fr] md:p-7">
+            <div className="border-l border-brand/70 pl-4">
+              <div className="font-mono text-xs uppercase tracking-[0.22em] text-brand">Project issuer</div>
+              <h2 className="mt-3 font-display text-2xl font-semibold text-white md:text-3xl">
+                BagsSignal is now live as a Bags token.
+              </h2>
+              <p className="mt-4 max-w-xl text-sm leading-7 text-muted">
+                The dashboard is built for the Bags creator economy, and the project token gives reviewers a direct on-chain reference for the product itself.
+              </p>
+            </div>
+
+            <div className="grid gap-4 lg:grid-cols-[1fr_0.82fr]">
+              <div className="border border-white/10 bg-black/30 p-5">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <div className="font-mono text-[11px] uppercase tracking-[0.2em] text-muted">Bags token</div>
+                    <div className="mt-2 font-display text-xl font-semibold text-white">BagsSignal</div>
+                  </div>
+                  <a
+                    href={projectTokenUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex h-10 items-center gap-2 border border-brand/40 bg-brand/[0.1] px-3 text-xs font-semibold uppercase tracking-[0.12em] text-brand transition hover:bg-brand hover:text-black"
+                  >
+                    Open on Bags
+                    <ExternalLink className="h-3.5 w-3.5" />
+                  </a>
+                </div>
+                <div className="mt-5 border-t border-white/10 pt-4">
+                  <div className="font-mono text-[11px] uppercase tracking-[0.2em] text-muted">Contract address</div>
+                  <div className="mt-2 break-all font-mono text-sm leading-6 text-white/90">{projectTokenMint}</div>
+                </div>
+              </div>
+
+              <div className="grid content-between gap-4 border border-white/10 bg-white/[0.025] p-5">
+                <div>
+                  <div className="font-mono text-[11px] uppercase tracking-[0.2em] text-muted">Source</div>
+                  <div className="mt-2 text-sm leading-6 text-white/85">
+                    Open project repository for the hackathon build, product notes, and implementation details.
+                  </div>
+                </div>
+                <a
+                  href="https://github.com/lzslim/BagsSignal"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex h-11 items-center justify-center gap-2 border border-white/15 bg-white/[0.04] px-4 text-sm font-semibold text-white transition hover:border-brand/45 hover:bg-brand/[0.1] hover:text-brand"
+                >
+                  <Github className="h-4 w-4" />
+                  View GitHub
+                </a>
+              </div>
+            </div>
+          </div>
         </div>
 
       </section>

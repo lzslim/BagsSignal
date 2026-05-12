@@ -52,8 +52,9 @@ export function AIAdvisorCard() {
         }
         const payload = await response.json() as { scenarios?: InsightCardType[][] };
         if (!cancelled && payload.scenarios?.length) {
+          const initialScenario = Math.floor(Math.random() * payload.scenarios.length);
           setPlaybook(payload.scenarios);
-          setScenarioIndex(0);
+          setScenarioIndex(initialScenario);
           setStreamProgress(0);
         } else if (!cancelled) {
           setLoadError(true);

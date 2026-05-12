@@ -1,9 +1,9 @@
 "use client";
 
 import { useConnection, useWallet } from "@solana/wallet-adapter-react";
-import { Transaction, VersionedTransaction } from "@solana/web3.js";
+import { Connection, Transaction, VersionedTransaction } from "@solana/web3.js";
 import { Buffer } from "buffer";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 type PrepareClaimResponse = {
   transactions: Array<{
@@ -32,6 +32,13 @@ export function useClaim() {
   const { connection } = useConnection();
   const wallet = useWallet();
   const [isClaiming, setIsClaiming] = useState(false);
+  const broadcastConnection = useMemo(() => {
+    const endpoint =
+      process.env.NEXT_PUBLIC_SOLANA_TX_RPC_URL?.trim() ||
+      process.env.NEXT_PUBLIC_SOLANA_RPC_URL?.trim();
+
+    return endpoint ? new Connection(endpoint, "confirmed") : connection;
+  }, [connection]);
 
   async function claimOne(mint: string) {
     if (!wallet.publicKey || !wallet.signAllTransactions) {
@@ -90,12 +97,12 @@ export function useClaim() {
       const tx = signed[index];
       let signature: string;
       try {
-        signature = await connection.sendRawTransaction(tx.serialize());
+        signature = await broadcastConnection.sendRawTransaction(tx.serialize());
       } catch (error) {
         throw normalizeRpcSendError(error);
       }
-      const latestBlockhash = transactions[index]?.blockhash ?? (await connection.getLatestBlockhash());
-      await connection.confirmTransaction(
+      const latestBlockhash = transactions[index]?.blockhash ?? (await broadcastConnection.getLatestBlockhash());
+      await broadcastConnection.confirmTransaction(
         {
           signature,
           blockhash: latestBlockhash.blockhash,
@@ -182,7 +189,7 @@ function normalizeRpcSendError(error: unknown) {
 
   if (message.includes("403") || message.toLowerCase().includes("access forbidden")) {
     return new Error(
-      "Solana RPC rejected the signed transaction with 403 Access forbidden. Set NEXT_PUBLIC_SOLANA_RPC_URL to a mainnet RPC endpoint that allows sendTransaction/sendRawTransaction, then restart the dev server."
+      "Solana RPC rejected the signed transaction with 403 Access forbidden. Set NEXT_PUBLIC_SOLANA_TX_RPC_URL or NEXT_PUBLIC_SOLANA_RPC_URL to a mainnet RPC endpoint that allows sendTransaction/sendRawTransaction, then restart the dev server."
     );
   }
 

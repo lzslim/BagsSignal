@@ -18,6 +18,8 @@ import { useRedirectOnDisconnect } from "@/hooks/useRedirectOnDisconnect";
 import { formatSOL } from "@/lib/utils";
 
 const SIMULATED_WALLET_KEY = "bagssignal.simulatedWallet";
+const CLAIM_SETTLING_KEY = "bagssignal.claimSettling";
+const CLAIM_SETTLING_MS = 120_000;
 
 export default function DashboardPage() {
   const { publicKey } = useWallet();
@@ -32,6 +34,7 @@ export default function DashboardPage() {
   const loading = sampleMode ? sample.isLoading : isLoading;
   const loadError = sampleMode ? sample.error : error;
   const { claimOne } = useClaim();
+  const [settlingClaims, setSettlingClaims] = useState<Record<string, number>>({});
   const [notice, setNotice] = useState<{ type: "idle" | "loading" | "success" | "error"; message?: string }>({
     type: "idle"
   });
@@ -43,6 +46,21 @@ export default function DashboardPage() {
     setSampleWallet(storedWallet);
     setSampleMode(true);
   }, [connectedWallet]);
+
+  useEffect(() => {
+    const stored = readSettlingClaims();
+    if (Object.keys(stored).length > 0) {
+      setSettlingClaims(stored);
+    }
+  }, []);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      setSettlingClaims((current) => pruneSettlingClaims(current));
+    }, 10_000);
+
+    return () => window.clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     if (notice.type === "idle" || notice.type === "loading") return;
@@ -93,7 +111,11 @@ export default function DashboardPage() {
     try {
       setNotice({ type: "loading", message: `Claiming fees for ${mint.slice(0, 4)}...` });
       const signatures = await claimOne(mint);
-      setNotice({ type: "success", message: `Claim completed with ${signatures.length} confirmed transaction(s).` });
+      markClaimSettling(mint);
+      setNotice({
+        type: "success",
+        message: `Claim confirmed with ${signatures.length} transaction(s). Bags may take a moment to update claimable fees, so this token is temporarily locked.`
+      });
       void mutate();
     } catch (claimError) {
       setNotice({
@@ -190,6 +212,7 @@ export default function DashboardPage() {
                   tokens={data.tokens}
                   onClaim={handleClaimOne}
                   claimBlocked={sampleMode || Boolean(data.demoMode) || !connectedWallet}
+                  settlingMints={Object.keys(settlingClaims)}
                 />
                 <RevenueChart data={data.chart} />
               </div>
@@ -200,4 +223,37 @@ export default function DashboardPage() {
       </div>
     </AppShell>
   );
+
+  function markClaimSettling(mint: string) {
+    setSettlingClaims((current) => {
+      const next = pruneSettlingClaims({
+        ...current,
+        [mint]: Date.now() + CLAIM_SETTLING_MS
+      });
+      writeSettlingClaims(next);
+      return next;
+    });
+  }
+}
+
+function readSettlingClaims() {
+  try {
+    const parsed = JSON.parse(window.sessionStorage.getItem(CLAIM_SETTLING_KEY) ?? "{}") as Record<string, number>;
+    return pruneSettlingClaims(parsed);
+  } catch {
+    return {};
+  }
+}
+
+function writeSettlingClaims(claims: Record<string, number>) {
+  window.sessionStorage.setItem(CLAIM_SETTLING_KEY, JSON.stringify(claims));
+}
+
+function pruneSettlingClaims(claims: Record<string, number>) {
+  const now = Date.now();
+  const next = Object.fromEntries(
+    Object.entries(claims).filter(([, expiresAt]) => Number(expiresAt) > now)
+  );
+  writeSettlingClaims(next);
+  return next;
 }

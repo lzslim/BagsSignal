@@ -25,7 +25,7 @@ export default function SettingsPage() {
               Add `BITQUERY_ACCESS_TOKEN` to enable leaderboard sync. The sync stores aggregated leaderboard rows in Supabase and the leaderboard page reads from the cloud database.
             </p>
             <p>
-              Set `NEXT_PUBLIC_SOLANA_RPC_URL` and `SOLANA_RPC_URL` to a stable mainnet RPC endpoint before production deployment.
+              Set `NEXT_PUBLIC_SOLANA_TX_RPC_URL` for claim transaction broadcasting. It can share the same mainnet RPC as `NEXT_PUBLIC_SOLANA_RPC_URL`, but the endpoint must allow `sendTransaction` / `sendRawTransaction`.
             </p>
             <p>
               Wallet signing always happens in the browser. The server only prepares unsigned claim transactions and never touches private keys.
